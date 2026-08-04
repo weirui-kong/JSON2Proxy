@@ -1,0 +1,40 @@
+# Local configuration and secrets
+.private/
+.env
+.env.*
+!.env.example
+
+# Runtime output and captures
+logs/
+*.log
+*.pcap
+*.pcapng
+
+# Build output
+/json2proxy-client
+/json2proxy-server
+bin/
+build/
+dist/
+*.test
+*.out
+coverage/
+coverage.*
+
+# Private keys and local certificates
+*.key
+*.pem
+*.p12
+*.pfx
+
+# OS and editor files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local scratch files
+tmp/
+temp/

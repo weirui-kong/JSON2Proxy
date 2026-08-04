@@ -1,0 +1,54 @@
+package config
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestServerDefaultsMaxConnections(t *testing.T) {
+	cfg := Server{Users: []User{{ClientID: "user"}}}
+	cfg.Defaults()
+	if got := cfg.Users[0].MaxConnections; got != 4096 {
+		t.Fatalf("default max_connections = %d, want 4096", got)
+	}
+}
+
+func TestServerDefaultsOutboundDNS(t *testing.T) {
+	cfg := Server{Outbound: Outbound{Type: "socks5", Address: "127.0.0.1:1080"}}
+	cfg.Defaults()
+	if cfg.Outbound.DNS != "local" {
+		t.Fatalf("default outbound DNS = %q, want local", cfg.Outbound.DNS)
+	}
+}
+
+func TestValidateOutbound(t *testing.T) {
+	valid := Outbound{
+		Type: "socks5", Address: "[2001:db8::1]:1080",
+		Username: "user", Password: "pass", DNS: "local",
+	}
+	if err := validateOutbound(valid); err != nil {
+		t.Fatalf("valid outbound rejected: %v", err)
+	}
+	for name, value := range map[string]Outbound{
+		"unsupported type": {Type: "http", Address: "127.0.0.1:8080", DNS: "local"},
+		"missing port":     {Type: "socks5", Address: "127.0.0.1", DNS: "local"},
+		"remote DNS":       {Type: "socks5", Address: "127.0.0.1:1080", DNS: "remote"},
+		"password only":    {Type: "socks5", Address: "127.0.0.1:1080", Password: "secret", DNS: "local"},
+		"username only":    {Type: "socks5", Address: "127.0.0.1:1080", Username: "user", DNS: "local"},
+		"oversize user":    {Type: "socks5", Address: "127.0.0.1:1080", Username: strings.Repeat("x", 256), DNS: "local"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateOutbound(value); err == nil {
+				t.Fatal("invalid outbound accepted")
+			}
+		})
+	}
+}
+
+func TestServerDefaultsPreservesExplicitMaxConnections(t *testing.T) {
+	cfg := Server{Users: []User{{ClientID: "user", MaxConnections: 128}}}
+	cfg.Defaults()
+	if got := cfg.Users[0].MaxConnections; got != 128 {
+		t.Fatalf("explicit max_connections changed to %d", got)
+	}
+}

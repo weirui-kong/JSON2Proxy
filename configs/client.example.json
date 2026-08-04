@@ -1,0 +1,15 @@
+{
+  "socks_listen": "127.0.0.1:8444",
+  "server": "example.net:8443",
+  "connect_timeout": "10s",
+  "handshake_timeout": "10s",
+  "idle_timeout": "5m",
+  "client_id": "demo-user",
+  "secret": "REPLACE_WITH_BASE64URL_32_BYTE_SECRET",
+  "log_size": "0M",
+  "log_file": "logs/client.log",
+  "obfs": {
+    "provider": "none",
+    "participation": 0
+  }
+}

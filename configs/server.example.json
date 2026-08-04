@@ -1,0 +1,21 @@
+{
+  "listen": "0.0.0.0:8443",
+  "handshake_timeout": "10s",
+  "dial_timeout": "10s",
+  "idle_timeout": "5m",
+  "log_size": "0M",
+  "log_file": "logs/server.log",
+  "obfs": {
+    "provider": "none",
+    "participation": 0
+  },
+  "users": [
+    {
+      "client_id": "demo-user",
+      "secret": "REPLACE_WITH_BASE64URL_32_BYTE_SECRET",
+      "status": "enabled",
+      "max_connections": 4096,
+      "allow_private": false
+    }
+  ]
+}
