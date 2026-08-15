@@ -31,6 +31,7 @@ type Server struct {
 	IdleTimeout      string      `json:"idle_timeout"`
 	LogSize          string      `json:"log_size"`
 	LogFile          string      `json:"log_file"`
+	Performance      Performance `json:"performance"`
 	Obfs             obfs.Config `json:"obfs"`
 	Outbound         Outbound    `json:"outbound,omitempty"`
 	Users            []User      `json:"users"`
@@ -42,6 +43,10 @@ type Outbound struct {
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
 	DNS      string `json:"dns,omitempty"`
+}
+
+type Performance struct {
+	Mode string `json:"mode"`
 }
 
 func (o Outbound) Enabled() bool {
@@ -58,6 +63,7 @@ type Client struct {
 	Secret           string      `json:"secret"`
 	LogSize          string      `json:"log_size"`
 	LogFile          string      `json:"log_file"`
+	Performance      Performance `json:"performance"`
 	Obfs             obfs.Config `json:"obfs"`
 }
 
@@ -97,6 +103,7 @@ func (s *Server) Defaults() {
 	if s.LogFile == "" {
 		s.LogFile = "logs/server.log"
 	}
+	s.Performance.Defaults()
 	if s.Obfs.Provider == "" {
 		s.Obfs.Provider = "none"
 	}
@@ -129,6 +136,7 @@ func (c *Client) Defaults() {
 	if c.LogFile == "" {
 		c.LogFile = "logs/client.log"
 	}
+	c.Performance.Defaults()
 	if c.Obfs.Provider == "" {
 		c.Obfs.Provider = "none"
 	}
@@ -148,6 +156,9 @@ func (s Server) Validate() error {
 		return fmt.Errorf("idle_timeout: %w", err)
 	}
 	if err := validateObfs(s.Obfs); err != nil {
+		return err
+	}
+	if err := s.Performance.Validate(); err != nil {
 		return err
 	}
 	if err := validateOutbound(s.Outbound); err != nil {
@@ -212,6 +223,9 @@ func (c Client) Validate() error {
 	if err := validateObfs(c.Obfs); err != nil {
 		return err
 	}
+	if err := c.Performance.Validate(); err != nil {
+		return err
+	}
 	for name, value := range map[string]string{
 		"connect_timeout": c.ConnectTimeout, "handshake_timeout": c.HandshakeTimeout,
 		"idle_timeout": c.IdleTimeout,
@@ -221,6 +235,21 @@ func (c Client) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (p *Performance) Defaults() {
+	if p.Mode == "" {
+		p.Mode = "interactive"
+	}
+}
+
+func (p Performance) Validate() error {
+	switch p.Mode {
+	case "interactive", "throughput":
+		return nil
+	default:
+		return errors.New("performance.mode must be interactive or throughput")
+	}
 }
 
 func validateObfs(value obfs.Config) error {

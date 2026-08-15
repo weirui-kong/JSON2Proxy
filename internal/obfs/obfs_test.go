@@ -3,6 +3,7 @@ package obfs
 import (
 	"bytes"
 	"encoding/json"
+	"net"
 	"strings"
 	"testing"
 
@@ -20,6 +21,40 @@ func TestBuiltInProvidersLoad(t *testing.T) {
 				t.Fatalf("unexpected provider identity: %q", provider.ID())
 			}
 		})
+	}
+}
+
+func TestNoneProviderUsesIdentityWireFormat(t *testing.T) {
+	provider, err := Load(Config{Provider: "none"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !provider.IdentityWireFormat() {
+		t.Fatal("embedded none provider did not enable identity wire format")
+	}
+	left, right := net.Pipe()
+	defer left.Close()
+	defer right.Close()
+	sender, err := provider.NewConn(left, "c2s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiver, err := provider.NewConn(right, "s2c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := protocol.Envelope{V: protocol.Version, Kind: "error", Code: "invalid_request", Message: "invalid request"}
+	errCh := make(chan error, 1)
+	go func() { errCh <- sender.WriteEnvelope(want) }()
+	got, err := receiver.ReadEnvelope()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = <-errCh; err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("identity envelope mismatch: got %#v, want %#v", got, want)
 	}
 }
 

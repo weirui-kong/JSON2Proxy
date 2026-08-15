@@ -39,6 +39,10 @@ type frameWriter struct {
 func (w *frameWriter) envelope(env protocol.Envelope) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	return w.writeEnvelopeLocked(env)
+}
+
+func (w *frameWriter) writeEnvelopeLocked(env protocol.Envelope) error {
 	_ = w.wire.SetWriteDeadline(time.Now().Add(w.timeout))
 	err := w.wire.WriteEnvelope(env)
 	_ = w.wire.SetWriteDeadline(time.Time{})
@@ -46,11 +50,13 @@ func (w *frameWriter) envelope(env protocol.Envelope) error {
 }
 
 func (w *frameWriter) frame(frame protocol.Frame) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	env, err := w.session.Seal(frame)
 	if err != nil {
 		return err
 	}
-	return w.envelope(env)
+	return w.writeEnvelopeLocked(env)
 }
 
 func main() {
@@ -77,8 +83,8 @@ func main() {
 	listener, err := net.Listen("tcp", cfg.SocksListen)
 	must(err)
 	defer listener.Close()
-	logger.Printf("client starting product=JSON2Proxy protocol=v%d socks_listen=%s server=%s log_size=%s obfs=%s obfs_version=%s participation=%.3f obfs_hash=%s",
-		protocol.Version, cfg.SocksListen, cfg.Server, cfg.LogSize, provider.ID(),
+	logger.Printf("client starting product=JSON2Proxy protocol=v%d socks_listen=%s server=%s log_size=%s performance=%s obfs=%s obfs_version=%s participation=%.3f obfs_hash=%s",
+		protocol.Version, cfg.SocksListen, cfg.Server, cfg.LogSize, cfg.Performance.Mode, provider.ID(),
 		provider.Descriptor.Version, provider.Participation, provider.Hash())
 	for {
 		conn, err := listener.Accept()
@@ -342,7 +348,7 @@ func (c *client) tunnel(local net.Conn, localReader *bufio.Reader, host string, 
 		}
 	}()
 
-	adaptive := flow.NewAdaptiveReader()
+	adaptive := flow.NewAdaptiveReader(flow.Mode(c.cfg.Performance.Mode))
 	for {
 		payload, readErr := adaptive.ReadFrame(local)
 		if len(payload) != 0 {

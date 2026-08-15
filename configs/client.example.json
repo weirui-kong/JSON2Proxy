@@ -8,6 +8,9 @@
   "secret": "REPLACE_WITH_BASE64URL_32_BYTE_SECRET",
   "log_size": "0M",
   "log_file": "logs/client.log",
+  "performance": {
+    "mode": "interactive"
+  },
   "obfs": {
     "provider": "none",
     "participation": 0

@@ -5,6 +5,9 @@
   "idle_timeout": "5m",
   "log_size": "0M",
   "log_file": "logs/server.log",
+  "performance": {
+    "mode": "interactive"
+  },
   "obfs": {
     "provider": "none",
     "participation": 0

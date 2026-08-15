@@ -129,6 +129,7 @@ type Provider struct {
 	Participation      float64
 	ParticipationMilli uint16
 	SourceSHA256       [32]byte
+	identityWire       bool
 	identity           []byte
 	wireToKind         map[string]string
 	decoyByEvent       map[string]*DecoyRule
@@ -172,9 +173,10 @@ func descriptorFromObject(object map[string]any, source []byte, participation fl
 	return p, nil
 }
 
-func (p *Provider) Identity() []byte { return append([]byte(nil), p.identity...) }
-func (p *Provider) ID() string       { return p.Descriptor.ID }
-func (p *Provider) Hash() string     { return fmt.Sprintf("%x", p.SourceSHA256) }
+func (p *Provider) Identity() []byte         { return append([]byte(nil), p.identity...) }
+func (p *Provider) ID() string               { return p.Descriptor.ID }
+func (p *Provider) Hash() string             { return fmt.Sprintf("%x", p.SourceSHA256) }
+func (p *Provider) IdentityWireFormat() bool { return p.identityWire }
 
 func (p *Provider) validate() error {
 	d := &p.Descriptor

@@ -56,6 +56,19 @@ Applications can then use the SOCKS5 proxy at `127.0.0.1:8444`. On Linux,
 `install.sh` can install the components as systemd services. Review the example
 configuration and replace every placeholder before starting a service.
 
+## Performance modes
+
+Both endpoints accept a `performance.mode` setting. `interactive` is the
+default and preserves the smaller initial frame target used for responsive
+traffic. `throughput` starts at the 64 KiB protocol frame limit and coalesces
+short adjacent reads for up to 2 ms, reducing per-frame overhead for sustained
+bulk transfers. Configure the same mode on both endpoints when comparing
+performance characteristics.
+
+```json
+{"performance":{"mode":"throughput"}}
+```
+
 ## Custom JSON layouts
 
 JSON2Proxy can load a restricted, static Provider descriptor to customize its

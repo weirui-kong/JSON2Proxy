@@ -13,6 +13,20 @@ func TestServerDefaultsMaxConnections(t *testing.T) {
 	}
 }
 
+func TestPerformanceModeDefaultsAndValidation(t *testing.T) {
+	cfg := Server{}
+	cfg.Defaults()
+	if cfg.Performance.Mode != "interactive" {
+		t.Fatalf("default performance mode = %q", cfg.Performance.Mode)
+	}
+	if err := (Performance{Mode: "throughput"}).Validate(); err != nil {
+		t.Fatalf("throughput mode rejected: %v", err)
+	}
+	if err := (Performance{Mode: "invalid"}).Validate(); err == nil {
+		t.Fatal("invalid performance mode accepted")
+	}
+}
+
 func TestServerDefaultsOutboundDNS(t *testing.T) {
 	cfg := Server{Outbound: Outbound{Type: "socks5", Address: "127.0.0.1:1080"}}
 	cfg.Defaults()

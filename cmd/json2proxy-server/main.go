@@ -60,6 +60,10 @@ type frameWriter struct {
 func (w *frameWriter) envelope(env protocol.Envelope) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	return w.writeEnvelopeLocked(env)
+}
+
+func (w *frameWriter) writeEnvelopeLocked(env protocol.Envelope) error {
 	_ = w.wire.SetWriteDeadline(time.Now().Add(w.timeout))
 	err := w.wire.WriteEnvelope(env)
 	_ = w.wire.SetWriteDeadline(time.Time{})
@@ -67,11 +71,13 @@ func (w *frameWriter) envelope(env protocol.Envelope) error {
 }
 
 func (w *frameWriter) frame(frame protocol.Frame) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	env, err := w.session.Seal(frame)
 	if err != nil {
 		return err
 	}
-	return w.envelope(env)
+	return w.writeEnvelopeLocked(env)
 }
 
 func (w *frameWriter) presetError(code, message string) error {
@@ -117,8 +123,8 @@ func main() {
 	listener, err := net.Listen("tcp", cfg.Listen)
 	must(err)
 	defer listener.Close()
-	logger.Printf("server starting product=JSON2Proxy protocol=v%d listen=%s log_size=%s obfs=%s obfs_version=%s participation=%.3f obfs_hash=%s egress=%s egress_proxy=%s",
-		protocol.Version, cfg.Listen, cfg.LogSize, provider.ID(), provider.Descriptor.Version,
+	logger.Printf("server starting product=JSON2Proxy protocol=v%d listen=%s log_size=%s performance=%s obfs=%s obfs_version=%s participation=%.3f obfs_hash=%s egress=%s egress_proxy=%s",
+		protocol.Version, cfg.Listen, cfg.LogSize, cfg.Performance.Mode, provider.ID(), provider.Descriptor.Version,
 		provider.Participation, provider.Hash(), a.egressType(), a.egressProxy())
 
 	stop := make(chan os.Signal, 1)
@@ -261,7 +267,7 @@ func (a *app) serve(tunnel net.Conn) {
 	var rejecting atomic.Bool
 	downDone := make(chan error, 1)
 	go func() {
-		adaptive := flow.NewAdaptiveReader()
+		adaptive := flow.NewAdaptiveReader(flow.Mode(a.cfg.Performance.Mode))
 		for {
 			_ = target.SetReadDeadline(time.Now().Add(a.idleTimeout))
 			payload, readErr := adaptive.ReadFrame(target)

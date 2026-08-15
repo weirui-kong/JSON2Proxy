@@ -40,6 +40,19 @@ func TestAdaptiveReaderBounds(t *testing.T) {
 	}
 }
 
+func TestThroughputModeStartsAtMaximumFrame(t *testing.T) {
+	r := NewAdaptiveReader(ModeThroughput)
+	if got := r.Target(); got != MaxFrame {
+		t.Fatalf("throughput initial target = %d, want %d", got, MaxFrame)
+	}
+	for range 20 {
+		r.Observe(0, time.Second, errors.New("blocked"))
+	}
+	if got := r.Target(); got != 16<<10 {
+		t.Fatalf("throughput minimum target = %d, want %d", got, 16<<10)
+	}
+}
+
 func TestIsNormalClose(t *testing.T) {
 	if !IsNormalClose(nil) || !IsNormalClose(io.EOF) || !IsNormalClose(io.ErrClosedPipe) {
 		t.Fatal("nil, EOF, and closed pipe must be normal closes")

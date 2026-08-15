@@ -14,16 +14,23 @@ const (
 	MaxFrame     = 64 << 10
 )
 
+type Mode string
+
+const (
+	ModeInteractive Mode = "interactive"
+	ModeThroughput  Mode = "throughput"
+)
+
 // AdaptiveReader coalesces small adjacent TCP reads for a very short period and
 // adjusts its target frame size from observed downstream write latency.
 //
 // Reads and writes remain synchronous, so TCP backpressure still bounds memory use.
 type AdaptiveReader struct {
 	target      int
+	minimum     int
 	fullStreak  int
 	smallStreak int
 	coalesce    time.Duration
-	buf         []byte
 }
 
 var framePool = sync.Pool{
@@ -32,12 +39,22 @@ var framePool = sync.Pool{
 	},
 }
 
-func NewAdaptiveReader() *AdaptiveReader {
-	return &AdaptiveReader{
-		target:   InitialFrame,
-		coalesce: time.Millisecond,
-		buf:      make([]byte, MaxFrame),
+func NewAdaptiveReader(modes ...Mode) *AdaptiveReader {
+	mode := ModeInteractive
+	if len(modes) != 0 {
+		mode = modes[0]
 	}
+	r := &AdaptiveReader{
+		target:   InitialFrame,
+		minimum:  MinFrame,
+		coalesce: time.Millisecond,
+	}
+	if mode == ModeThroughput {
+		r.target = MaxFrame
+		r.minimum = 16 << 10
+		r.coalesce = 2 * time.Millisecond
+	}
+	return r
 }
 
 func (r *AdaptiveReader) Target() int {
@@ -47,14 +64,16 @@ func (r *AdaptiveReader) Target() int {
 // ReadFrame returns one frame and a terminal source error, if both happened in
 // the same read. Callers must send non-empty data before handling the error.
 func (r *AdaptiveReader) ReadFrame(conn net.Conn) ([]byte, error) {
-	n, readErr := conn.Read(r.buf[:r.target])
+	payload := framePool.Get().([]byte)[:r.target]
+	n, readErr := conn.Read(payload)
 	if n == 0 {
+		ReleaseFrame(payload)
 		return nil, readErr
 	}
 	if readErr == nil && n < r.target {
 		_ = conn.SetReadDeadline(time.Now().Add(r.coalesce))
 		for n < r.target {
-			m, err := conn.Read(r.buf[n:r.target])
+			m, err := conn.Read(payload[n:r.target])
 			n += m
 			if err != nil {
 				var ne net.Error
@@ -68,8 +87,6 @@ func (r *AdaptiveReader) ReadFrame(conn net.Conn) ([]byte, error) {
 		}
 		_ = conn.SetReadDeadline(time.Time{})
 	}
-	payload := framePool.Get().([]byte)
-	copy(payload, r.buf[:n])
 	return payload[:n], readErr
 }
 
@@ -106,8 +123,8 @@ func (r *AdaptiveReader) Observe(size int, writeDuration time.Duration, writeErr
 
 func (r *AdaptiveReader) shrink() {
 	r.target /= 2
-	if r.target < MinFrame {
-		r.target = MinFrame
+	if r.target < r.minimum {
+		r.target = r.minimum
 	}
 	r.fullStreak = 0
 	r.smallStreak = 0

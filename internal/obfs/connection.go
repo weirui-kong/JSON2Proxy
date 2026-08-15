@@ -26,6 +26,8 @@ type wireField struct {
 	raw  json.RawMessage
 }
 
+const wireReadBuffer = 16 << 10
+
 type Conn struct {
 	net.Conn
 	provider  *Provider
@@ -59,7 +61,7 @@ func (p *Provider) NewConn(conn net.Conn, sendDir string) (*Conn, error) {
 		recvDir = "c2s"
 	}
 	c := &Conn{
-		Conn: conn, provider: p, reader: bufio.NewReaderSize(conn, protocol.MaxLine),
+		Conn: conn, provider: p, reader: bufio.NewReaderSize(conn, wireReadBuffer),
 		sendDir: sendDir, recvDir: recvDir, phase: "before_hello", done: make(chan struct{}),
 	}
 	c.lastReal.Store(time.Now().UnixNano())
@@ -161,6 +163,15 @@ func (c *Conn) decoyInterval(rule *DecoyRule) time.Duration {
 }
 
 func (c *Conn) WriteEnvelope(env protocol.Envelope) error {
+	if c.provider.IdentityWireFormat() {
+		c.writeMu.Lock()
+		defer c.writeMu.Unlock()
+		if err := protocol.WriteLine(c.Conn, env); err != nil {
+			return err
+		}
+		c.lastReal.Store(time.Now().UnixNano())
+		return nil
+	}
 	fields, err := c.provider.encodeEnvelope(env, c.sendDir)
 	if err != nil {
 		return err
@@ -182,6 +193,13 @@ func (c *Conn) WriteEnvelope(env protocol.Envelope) error {
 }
 
 func (c *Conn) ReadEnvelope() (protocol.Envelope, error) {
+	if c.provider.IdentityWireFormat() {
+		env, err := protocol.ReadLine(c.reader)
+		if err == nil {
+			c.lastReal.Store(time.Now().UnixNano())
+		}
+		return env, err
+	}
 	for {
 		line, err := readWireLine(c.reader)
 		if err != nil {

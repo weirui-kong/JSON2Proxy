@@ -46,5 +46,8 @@ func Load(config Config) (*Provider, error) {
 	if !strings.HasPrefix(name, "file:") && provider.ID() != name {
 		return nil, errors.New("built-in obfs provider id does not match filename")
 	}
+	// Only the embedded none provider preserves the protocol envelope
+	// field-for-field, so it can use the allocation-light fast path.
+	provider.identityWire = name == "none"
 	return provider, nil
 }

@@ -66,6 +66,10 @@ type Frame struct {
 	Payload []byte
 }
 
+var linePool = sync.Pool{
+	New: func() any { return make([]byte, 0, MaxLine) },
+}
+
 func B64(b []byte) string            { return base64.RawURLEncoding.EncodeToString(b) }
 func UnB64(s string) ([]byte, error) { return base64.RawURLEncoding.DecodeString(s) }
 
@@ -89,7 +93,8 @@ func WriteLine(w io.Writer, v any) error {
 }
 
 func ReadLine(r *bufio.Reader) (Envelope, error) {
-	var line []byte
+	line := linePool.Get().([]byte)[:0]
+	defer linePool.Put(line[:0])
 	for {
 		part, err := r.ReadSlice('\n')
 		if len(line)+len(part) > MaxLine {
