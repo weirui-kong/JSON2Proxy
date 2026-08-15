@@ -23,6 +23,12 @@ depend on HTTP, TLS, or a CDN.
 - A SOCKS5 listener bound to `127.0.0.1:8444` by default and a server TCP
   listener on port `8443` by default.
 
+When server-side SOCKS5 egress is configured, `outbound.dns` may be `"local"`
+(the default) or `"remote"`. Remote DNS sends domain names to the SOCKS5
+server unchanged. It does not permit JSON2Proxy to apply its local private-IP
+check to names, so use it only with an upstream proxy that enforces its own
+destination policy.
+
 ## Performance trade-offs
 
 JSON encoding, message validation, and session control add CPU work, byte

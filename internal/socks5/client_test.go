@@ -133,9 +133,15 @@ func TestDialContextHonorsCancellationDuringHandshake(t *testing.T) {
 	}
 }
 
-func TestConnectRequestRejectsRemoteDNS(t *testing.T) {
-	if _, err := connectRequest("example.com:443"); err == nil {
-		t.Fatal("domain target accepted; outbound must use local DNS")
+func TestConnectRequestSupportsRemoteDNS(t *testing.T) {
+	got, err := connectRequest("example.com:443")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := append([]byte{5, 1, 0, 3, byte(len("example.com"))}, []byte("example.com")...)
+	want = append(want, 1, 187)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("unexpected SOCKS5 domain request: %v", got)
 	}
 }
 

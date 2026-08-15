@@ -220,7 +220,7 @@ func (a *app) serveUDP(tunnel net.Conn, writer *frameWriter, session *protocol.S
 					stats.rateDrops.Add(1)
 					continue
 				}
-				address, resolved, resolveErr := a.resolveUDP(host, port, user.AllowPrivate)
+				egressHost, egressPort, resolved, resolveErr := a.resolveUDP(host, port, user.AllowPrivate)
 				if resolveErr != nil {
 					if errors.Is(resolveErr, errPrivateTarget) {
 						_ = writer.presetError(errorPrivateTarget, "private target denied")
@@ -245,7 +245,7 @@ func (a *app) serveUDP(tunnel net.Conn, writer *frameWriter, session *protocol.S
 					continue
 				}
 				recentMu.Unlock()
-				if writeErr := egress.WriteDatagram(address.IP.String(), uint16(address.Port), data); writeErr != nil {
+				if writeErr := egress.WriteDatagram(egressHost, egressPort, data); writeErr != nil {
 					stats.policyDrops.Add(1)
 					continue
 				}
@@ -420,9 +420,13 @@ func (a *app) allowUDPRate(clientID string, bytes int) bool {
 	return true
 }
 
-func (a *app) resolveUDP(host string, port uint16, allowPrivate bool) (*net.UDPAddr, string, error) {
+func (a *app) resolveUDP(host string, port uint16, allowPrivate bool) (string, uint16, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), a.dialTimeout)
 	defer cancel()
+	requestedTarget := net.JoinHostPort(host, strconv.Itoa(int(port)))
+	if a.outboundSOCKS != nil && a.cfg.Outbound.UsesRemoteDNS() && net.ParseIP(host) == nil {
+		return host, port, requestedTarget, nil
+	}
 	var addresses []net.IP
 	if ip := net.ParseIP(host); ip != nil {
 		addresses = []net.IP{ip}
@@ -434,7 +438,7 @@ func (a *app) resolveUDP(host string, port uint16, allowPrivate bool) (*net.UDPA
 		a.mu.Unlock()
 		if found && now.Before(cached.expires) {
 			if cached.negative {
-				return nil, "", errors.New("cached UDP DNS failure")
+				return "", 0, "", errors.New("cached UDP DNS failure")
 			}
 			addresses = append([]net.IP(nil), cached.addresses...)
 		} else {
@@ -451,7 +455,7 @@ func (a *app) resolveUDP(host string, port uint16, allowPrivate bool) (*net.UDPA
 			}
 			a.storeUDPDNS(key, entry, now)
 			if lookupErr != nil {
-				return nil, "", lookupErr
+				return "", 0, "", lookupErr
 			}
 			addresses = ips
 		}
@@ -464,9 +468,9 @@ func (a *app) resolveUDP(host string, port uint16, allowPrivate bool) (*net.UDPA
 			continue
 		}
 		address := &net.UDPAddr{IP: ip, Port: int(port)}
-		return address, net.JoinHostPort(ip.String(), strconv.Itoa(int(port))), nil
+		return address.IP.String(), uint16(address.Port), net.JoinHostPort(ip.String(), strconv.Itoa(int(port))), nil
 	}
-	return nil, "", errPrivateTarget
+	return "", 0, "", errPrivateTarget
 }
 
 func udpNeverAllowed(ip net.IP) bool {

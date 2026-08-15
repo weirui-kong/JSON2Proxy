@@ -441,6 +441,14 @@ func (a *app) activeCount(clientID string) int {
 func (a *app) dial(host string, port uint16, allowPrivate bool) (net.Conn, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), a.dialTimeout)
 	defer cancel()
+	requestedTarget := net.JoinHostPort(host, strconv.Itoa(int(port)))
+	if a.outbound != nil && a.cfg.Outbound.UsesRemoteDNS() && net.ParseIP(host) == nil {
+		conn, err := a.outbound.DialContext(ctx, "tcp", requestedTarget)
+		if err != nil {
+			return nil, "", err
+		}
+		return conn, requestedTarget, nil
+	}
 	var addresses []net.IP
 	if ip := net.ParseIP(host); ip != nil {
 		addresses = []net.IP{ip}

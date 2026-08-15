@@ -83,6 +83,27 @@ func TestDialRoutesResolvedIPThroughOutbound(t *testing.T) {
 	}
 }
 
+func TestDialRoutesDomainThroughRemoteOutbound(t *testing.T) {
+	client, peer := net.Pipe()
+	defer client.Close()
+	defer peer.Close()
+	outbound := &fakeOutboundDialer{conn: client}
+	a := &app{
+		dialTimeout: time.Second,
+		outbound:    outbound,
+		cfg: config.Server{Outbound: config.Outbound{
+			Type: "socks5", Address: "127.0.0.1:1080", DNS: "remote",
+		}},
+	}
+	conn, target, err := a.dial("does-not-resolve.invalid", 443, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conn != client || outbound.network != "tcp" || outbound.target != "does-not-resolve.invalid:443" || target != "does-not-resolve.invalid:443" {
+		t.Fatalf("unexpected remote outbound route: network=%q target=%q resolved=%q", outbound.network, outbound.target, target)
+	}
+}
+
 func TestClaimDistinguishesReplayAndQuota(t *testing.T) {
 	a := &app{
 		replay: make(map[string]time.Time),

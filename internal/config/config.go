@@ -67,6 +67,13 @@ func (o Outbound) Enabled() bool {
 	return o.Type != "" || o.Address != "" || o.Username != "" || o.Password != "" || o.DNS != ""
 }
 
+// UsesRemoteDNS reports whether domain names are delegated to the outbound
+// SOCKS5 server. In this mode the SOCKS5 server enforces destination policy
+// after resolving a name.
+func (o Outbound) UsesRemoteDNS() bool {
+	return o.Enabled() && o.DNS == "remote"
+}
+
 type Client struct {
 	SocksListen      string      `json:"socks_listen"`
 	Server           string      `json:"server"`
@@ -276,8 +283,8 @@ func validateOutbound(value Outbound) error {
 	if err != nil || portNumber == 0 {
 		return errors.New("outbound.address must contain a numeric port from 1 to 65535")
 	}
-	if value.DNS != "local" {
-		return errors.New("outbound.dns must be local")
+	if value.DNS != "local" && value.DNS != "remote" {
+		return errors.New("outbound.dns must be local or remote")
 	}
 	if value.Password != "" && value.Username == "" {
 		return errors.New("outbound.username is required when password is configured")

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"json2proxy/internal/config"
+	"json2proxy/internal/socks5"
 )
 
 func TestDirectUDPEgressRoundTrip(t *testing.T) {
@@ -61,6 +62,23 @@ func TestUDPAssociationLimitAndRate(t *testing.T) {
 	release()
 	if !a.allowUDPRate("user", 4) || a.allowUDPRate("user", 1) {
 		t.Fatal("UDP per-user rate limit not enforced")
+	}
+}
+
+func TestResolveUDPDelegatesDomainToRemoteOutbound(t *testing.T) {
+	a := &app{
+		dialTimeout:   time.Second,
+		outboundSOCKS: socks5.New("127.0.0.1:1080", "", ""),
+		cfg: config.Server{Outbound: config.Outbound{
+			Type: "socks5", Address: "127.0.0.1:1080", DNS: "remote",
+		}},
+	}
+	host, port, target, err := a.resolveUDP("does-not-resolve.invalid", 53, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host != "does-not-resolve.invalid" || port != 53 || target != "does-not-resolve.invalid:53" {
+		t.Fatalf("unexpected remote UDP route: %q %d %q", host, port, target)
 	}
 }
 

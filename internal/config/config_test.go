@@ -43,10 +43,13 @@ func TestValidateOutbound(t *testing.T) {
 	if err := validateOutbound(valid); err != nil {
 		t.Fatalf("valid outbound rejected: %v", err)
 	}
+	if err := validateOutbound(Outbound{Type: "socks5", Address: "127.0.0.1:1080", DNS: "remote"}); err != nil {
+		t.Fatalf("remote DNS outbound rejected: %v", err)
+	}
 	for name, value := range map[string]Outbound{
 		"unsupported type": {Type: "http", Address: "127.0.0.1:8080", DNS: "local"},
 		"missing port":     {Type: "socks5", Address: "127.0.0.1", DNS: "local"},
-		"remote DNS":       {Type: "socks5", Address: "127.0.0.1:1080", DNS: "remote"},
+		"invalid DNS":      {Type: "socks5", Address: "127.0.0.1:1080", DNS: "invalid"},
 		"password only":    {Type: "socks5", Address: "127.0.0.1:1080", Password: "secret", DNS: "local"},
 		"username only":    {Type: "socks5", Address: "127.0.0.1:1080", Username: "user", DNS: "local"},
 		"oversize user":    {Type: "socks5", Address: "127.0.0.1:1080", Username: strings.Repeat("x", 256), DNS: "local"},

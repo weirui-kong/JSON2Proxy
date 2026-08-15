@@ -2,7 +2,6 @@ package socks5
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -164,21 +163,11 @@ func connectRequest(target string) ([]byte, error) {
 	if err != nil || port == 0 {
 		return nil, errors.New("invalid SOCKS5 target port")
 	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return nil, errors.New("SOCKS5 target must be a locally resolved IP address")
+	address, err := encodeAddress(host, uint16(port))
+	if err != nil {
+		return nil, fmt.Errorf("encode SOCKS5 target: %w", err)
 	}
-	request := []byte{version, commandConnect, 0}
-	if ipv4 := ip.To4(); ipv4 != nil {
-		request = append(request, addressIPv4)
-		request = append(request, ipv4...)
-	} else {
-		request = append(request, addressIPv6)
-		request = append(request, ip.To16()...)
-	}
-	var encodedPort [2]byte
-	binary.BigEndian.PutUint16(encodedPort[:], uint16(port))
-	return append(request, encodedPort[:]...), nil
+	return append([]byte{version, commandConnect, 0}, address...), nil
 }
 
 func readConnectReply(conn net.Conn) error {
