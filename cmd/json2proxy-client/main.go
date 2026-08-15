@@ -25,6 +25,7 @@ type client struct {
 	connectTimeout   time.Duration
 	handshakeTimeout time.Duration
 	idleTimeout      time.Duration
+	udpIdleTimeout   time.Duration
 	log              *logging.Logger
 	provider         *obfs.Provider
 }
@@ -79,13 +80,14 @@ func main() {
 	c.connectTimeout, _ = config.Duration(cfg.ConnectTimeout)
 	c.handshakeTimeout, _ = config.Duration(cfg.HandshakeTimeout)
 	c.idleTimeout, _ = config.Duration(cfg.IdleTimeout)
+	c.udpIdleTimeout, _ = config.Duration(cfg.UDP.IdleTimeout)
 
 	listener, err := net.Listen("tcp", cfg.SocksListen)
 	must(err)
 	defer listener.Close()
-	logger.Printf("client starting product=JSON2Proxy protocol=v%d socks_listen=%s server=%s log_size=%s performance=%s obfs=%s obfs_version=%s participation=%.3f obfs_hash=%s",
-		protocol.Version, cfg.SocksListen, cfg.Server, cfg.LogSize, cfg.Performance.Mode, provider.ID(),
-		provider.Descriptor.Version, provider.Participation, provider.Hash())
+	logger.Printf("client starting product=JSON2Proxy protocol=v%d socks_listen=%s server=%s log_size=%s performance=%s obfs=%s obfs_version=%s participation=%.3f obfs_hash=%s udp=%t udp_bind=%s",
+		protocol.Version, cfg.SocksListen, cfg.Server, cfg.LogSize, cfg.Performance.Mode,
+		provider.ID(), provider.Descriptor.Version, provider.Participation, provider.Hash(), cfg.UDP.IsEnabled(), cfg.UDP.Bind)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -108,14 +110,23 @@ func (c *client) serveSOCKS(local net.Conn) {
 		c.log.Printf("socks closed source=%s reason=handshake_failed", source)
 		return
 	}
-	host, port, err := socksRequest(reader)
+	request, err := socksRequest(reader)
 	if err != nil {
 		socksReply(local, 1)
 		c.log.Printf("socks closed source=%s reason=request_failed", source)
 		return
 	}
-	target := net.JoinHostPort(host, strconv.Itoa(int(port)))
-	up, down, sessionID, err := c.tunnel(local, reader, host, port)
+	if request.Command == 3 {
+		if !c.cfg.UDP.IsEnabled() {
+			socksReply(local, 7)
+			c.log.Printf("socks udp closed source=%s target=- reason=udp_disabled", source)
+			return
+		}
+		c.serveUDP(local, reader, request)
+		return
+	}
+	target := net.JoinHostPort(request.Host, strconv.Itoa(int(request.Port)))
+	up, down, sessionID, err := c.tunnel(local, reader, request.Host, request.Port)
 	if err != nil {
 		c.log.Printf("socks closed source=%s target=%s session=%s bytes_up=%d bytes_down=%d duration=%s reason=tunnel_failed error=%q",
 			source, target, sessionID, up, down, time.Since(started).Round(time.Millisecond), err)
@@ -147,50 +158,57 @@ func socksHello(reader *bufio.Reader, writer io.Writer) error {
 	return errors.New("SOCKS5 client did not offer no-auth")
 }
 
-func socksRequest(reader *bufio.Reader) (string, uint16, error) {
+type socksRequestInfo struct {
+	Command     byte
+	AddressType byte
+	Host        string
+	Port        uint16
+}
+
+func socksRequest(reader *bufio.Reader) (socksRequestInfo, error) {
 	header := make([]byte, 4)
 	if _, err := io.ReadFull(reader, header); err != nil {
-		return "", 0, err
+		return socksRequestInfo{}, err
 	}
-	if header[0] != 5 || header[1] != 1 || header[2] != 0 {
-		return "", 0, errors.New("unsupported SOCKS5 request")
+	if header[0] != 5 || (header[1] != 1 && header[1] != 3) || header[2] != 0 {
+		return socksRequestInfo{}, errors.New("unsupported SOCKS5 request")
 	}
 	var host string
 	switch header[3] {
 	case 1:
 		b := make([]byte, 4)
 		if _, err := io.ReadFull(reader, b); err != nil {
-			return "", 0, err
+			return socksRequestInfo{}, err
 		}
 		host = net.IP(b).String()
 	case 3:
 		n, err := reader.ReadByte()
 		if err != nil || n == 0 {
-			return "", 0, errors.New("invalid SOCKS5 domain")
+			return socksRequestInfo{}, errors.New("invalid SOCKS5 domain")
 		}
 		b := make([]byte, int(n))
 		if _, err = io.ReadFull(reader, b); err != nil {
-			return "", 0, err
+			return socksRequestInfo{}, err
 		}
 		host = string(b)
 	case 4:
 		b := make([]byte, 16)
 		if _, err := io.ReadFull(reader, b); err != nil {
-			return "", 0, err
+			return socksRequestInfo{}, err
 		}
 		host = net.IP(b).String()
 	default:
-		return "", 0, errors.New("unsupported SOCKS5 address type")
+		return socksRequestInfo{}, errors.New("unsupported SOCKS5 address type")
 	}
 	p := make([]byte, 2)
 	if _, err := io.ReadFull(reader, p); err != nil {
-		return "", 0, err
+		return socksRequestInfo{}, err
 	}
 	port := uint16(p[0])<<8 | uint16(p[1])
-	if port == 0 {
-		return "", 0, errors.New("invalid SOCKS5 port")
+	if port == 0 && header[1] != 3 {
+		return socksRequestInfo{}, errors.New("invalid SOCKS5 port")
 	}
-	return host, port, nil
+	return socksRequestInfo{Command: header[1], AddressType: header[3], Host: host, Port: port}, nil
 }
 
 func socksReply(writer io.Writer, code byte) {

@@ -14,5 +14,12 @@
   "obfs": {
     "provider": "none",
     "participation": 0
+  },
+  "udp": {
+    "enabled": true,
+    "bind": "127.0.0.1:0",
+    "idle_timeout": "2m",
+    "max_datagram_size": 61440,
+    "queue_packets": 256
   }
 }

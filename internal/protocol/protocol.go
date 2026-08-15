@@ -24,20 +24,25 @@ import (
 )
 
 const (
-	Version    = 4
-	MaxLine    = 96 << 10
-	MaxPayload = 64 << 10
+	Version        = 4
+	MaxLine        = 96 << 10
+	MaxPayload     = 64 << 10
+	MaxUDPDatagram = 60 << 10
 )
 
 const (
-	FrameOpen       byte = 1
-	FrameOpenResult byte = 2
-	FrameData       byte = 3
-	FrameCloseWrite byte = 4
-	FrameReset      byte = 5
-	FramePing       byte = 6
-	FramePong       byte = 7
-	FrameKeyConfirm byte = 8
+	FrameOpen          byte = 1
+	FrameOpenResult    byte = 2
+	FrameData          byte = 3
+	FrameCloseWrite    byte = 4
+	FrameReset         byte = 5
+	FramePing          byte = 6
+	FramePong          byte = 7
+	FrameKeyConfirm    byte = 8
+	FrameUDPOpen       byte = 9
+	FrameUDPOpenResult byte = 10
+	FrameUDPDatagram   byte = 11
+	FrameUDPClose      byte = 12
 )
 
 type Envelope struct {
@@ -510,7 +515,8 @@ func DecodeFrame(b []byte) (Frame, error) {
 	}
 	switch b[1] {
 	case FrameOpen, FrameOpenResult, FrameData, FrameCloseWrite, FrameReset,
-		FramePing, FramePong, FrameKeyConfirm:
+		FramePing, FramePong, FrameKeyConfirm, FrameUDPOpen, FrameUDPOpenResult,
+		FrameUDPDatagram, FrameUDPClose:
 	default:
 		return Frame{}, errors.New("unknown frame type")
 	}
@@ -532,8 +538,89 @@ func DecodeFrame(b []byte) (Frame, error) {
 		if payloadLength != sha256.Size {
 			return Frame{}, errors.New("invalid KEY_CONFIRM frame")
 		}
+	case FrameUDPOpen:
+		if payloadLength != 2 || b[7] != 1 || b[8] != 0 {
+			return Frame{}, errors.New("invalid UDP_OPEN frame")
+		}
+	case FrameUDPOpenResult, FrameUDPClose:
+		if payloadLength == 0 || payloadLength > 256 {
+			return Frame{}, errors.New("invalid UDP result frame")
+		}
+	case FrameUDPDatagram:
+		if _, _, _, err := ParseUDPDatagram(b[7:]); err != nil {
+			return Frame{}, err
+		}
 	}
 	return Frame{Type: b[1], Flags: b[2], Payload: b[7:]}, nil
+}
+
+func UDPOpenPayload() []byte { return []byte{1, 0} }
+
+// UDPDatagramPayload encodes one complete UDP datagram. The address is a
+// destination in c2s frames and the observed source in s2c frames.
+func UDPDatagramPayload(host string, port uint16, data []byte) ([]byte, error) {
+	if len(data) > MaxUDPDatagram {
+		return nil, errors.New("UDP datagram too large")
+	}
+	address, err := OpenPayload(host, port)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]byte, 0, len(address)+2+len(data))
+	result = append(result, address...)
+	var size [2]byte
+	binary.BigEndian.PutUint16(size[:], uint16(len(data)))
+	result = append(result, size[:]...)
+	result = append(result, data...)
+	if len(result) > MaxPayload {
+		return nil, errors.New("UDP frame payload too large")
+	}
+	return result, nil
+}
+
+func ParseUDPDatagram(payload []byte) (string, uint16, []byte, error) {
+	addressLength, err := encodedAddressLength(payload)
+	if err != nil || len(payload) < addressLength+2 {
+		return "", 0, nil, errors.New("invalid UDP_DATAGRAM address")
+	}
+	host, port, err := ParseOpen(payload[:addressLength])
+	if err != nil {
+		return "", 0, nil, err
+	}
+	dataLength := int(binary.BigEndian.Uint16(payload[addressLength : addressLength+2]))
+	if dataLength > MaxUDPDatagram || len(payload) != addressLength+2+dataLength {
+		return "", 0, nil, errors.New("invalid UDP_DATAGRAM length")
+	}
+	return host, port, payload[addressLength+2:], nil
+}
+
+func encodedAddressLength(payload []byte) (int, error) {
+	if len(payload) == 0 {
+		return 0, errors.New("missing address")
+	}
+	switch payload[0] {
+	case 1:
+		if len(payload) < 7 {
+			return 0, errors.New("short IPv4 address")
+		}
+		return 7, nil
+	case 4:
+		if len(payload) < 19 {
+			return 0, errors.New("short IPv6 address")
+		}
+		return 19, nil
+	case 3:
+		if len(payload) < 2 || payload[1] == 0 || payload[1] > 253 {
+			return 0, errors.New("invalid domain address")
+		}
+		n := int(payload[1]) + 4
+		if len(payload) < n {
+			return 0, errors.New("short domain address")
+		}
+		return n, nil
+	default:
+		return 0, errors.New("unsupported address type")
+	}
 }
 
 func (s *Session) Seal(frame Frame) (Envelope, error) {

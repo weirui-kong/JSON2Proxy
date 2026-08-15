@@ -66,3 +66,24 @@ func TestServerDefaultsPreservesExplicitMaxConnections(t *testing.T) {
 		t.Fatalf("explicit max_connections changed to %d", got)
 	}
 }
+
+func TestUDPDefaultsEnabledAndFalseIsPreserved(t *testing.T) {
+	server := Server{}
+	server.Defaults()
+	if !server.UDP.IsEnabled() {
+		t.Fatal("server UDP must default to enabled")
+	}
+	client := Client{SocksListen: "127.0.0.1:8444"}
+	client.Defaults()
+	if !client.UDP.IsEnabled() || client.UDP.Bind != "127.0.0.1:0" {
+		t.Fatalf("unexpected client UDP defaults: enabled=%t bind=%q", client.UDP.IsEnabled(), client.UDP.Bind)
+	}
+	disabled := false
+	server = Server{UDP: ServerUDP{Enabled: &disabled}}
+	server.Defaults()
+	client = Client{SocksListen: "127.0.0.1:8444", UDP: ClientUDP{Enabled: &disabled}}
+	client.Defaults()
+	if server.UDP.IsEnabled() || client.UDP.IsEnabled() {
+		t.Fatal("explicit UDP disable was overwritten by defaults")
+	}
+}

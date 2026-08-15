@@ -41,6 +41,9 @@ type app struct {
 	users            map[string]config.User
 	replay           map[string]time.Time
 	active           map[string]int
+	udpActive        map[string]int
+	udpRates         map[string]*udpRateState
+	udpDNS           map[string]udpDNSCacheEntry
 	handshakeTimeout time.Duration
 	dialTimeout      time.Duration
 	idleTimeout      time.Duration
@@ -48,6 +51,7 @@ type app struct {
 	log              *logging.Logger
 	provider         *obfs.Provider
 	outbound         contextDialer
+	outboundSOCKS    *socks5.Client
 }
 
 type frameWriter struct {
@@ -108,13 +112,16 @@ func main() {
 
 	a := &app{
 		cfg: cfg, users: make(map[string]config.User), replay: make(map[string]time.Time),
-		active: make(map[string]int), log: logger, provider: provider,
+		active: make(map[string]int), udpActive: make(map[string]int),
+		udpRates: make(map[string]*udpRateState), udpDNS: make(map[string]udpDNSCacheEntry),
+		log: logger, provider: provider,
 	}
 	a.handshakeTimeout, _ = config.Duration(cfg.HandshakeTimeout)
 	a.dialTimeout, _ = config.Duration(cfg.DialTimeout)
 	a.idleTimeout, _ = config.Duration(cfg.IdleTimeout)
 	if cfg.Outbound.Enabled() {
-		a.outbound = socks5.New(cfg.Outbound.Address, cfg.Outbound.Username, cfg.Outbound.Password)
+		a.outboundSOCKS = socks5.New(cfg.Outbound.Address, cfg.Outbound.Username, cfg.Outbound.Password)
+		a.outbound = a.outboundSOCKS
 	}
 	for _, user := range cfg.Users {
 		a.users[user.ClientID] = user
@@ -123,9 +130,9 @@ func main() {
 	listener, err := net.Listen("tcp", cfg.Listen)
 	must(err)
 	defer listener.Close()
-	logger.Printf("server starting product=JSON2Proxy protocol=v%d listen=%s log_size=%s performance=%s obfs=%s obfs_version=%s participation=%.3f obfs_hash=%s egress=%s egress_proxy=%s",
-		protocol.Version, cfg.Listen, cfg.LogSize, cfg.Performance.Mode, provider.ID(), provider.Descriptor.Version,
-		provider.Participation, provider.Hash(), a.egressType(), a.egressProxy())
+	logger.Printf("server starting product=JSON2Proxy protocol=v%d listen=%s log_size=%s performance=%s obfs=%s obfs_version=%s participation=%.3f obfs_hash=%s egress=%s egress_proxy=%s udp=%t",
+		protocol.Version, cfg.Listen, cfg.LogSize, cfg.Performance.Mode, provider.ID(),
+		provider.Descriptor.Version, provider.Participation, provider.Hash(), a.egressType(), a.egressProxy(), cfg.UDP.IsEnabled())
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
@@ -227,7 +234,21 @@ func (a *app) serve(tunnel net.Conn) {
 	wire.SetPhase("established")
 	wire.StartScheduler()
 	frame, err = readFrame(wire, session)
-	if err != nil || frame.Type != protocol.FrameOpen {
+	if err != nil {
+		a.log.Printf("connection rejected source=%s user=%s session=%s reason=invalid_open", source, clientHello.ClientID, session.ID())
+		_ = writer.presetError(errorInvalidRequest, "invalid request")
+		return
+	}
+	if frame.Type == protocol.FrameUDPOpen {
+		if !a.cfg.UDP.IsEnabled() {
+			_ = writer.frame(protocol.Frame{Type: protocol.FrameUDPOpenResult, Payload: protocol.Result(4, "UDP disabled")})
+			a.log.Printf("connection rejected source=%s user=%s session=%s udp=true reason=udp_disabled", source, clientHello.ClientID, session.ID())
+			return
+		}
+		a.serveUDP(tunnel, writer, session, user, source, started)
+		return
+	}
+	if frame.Type != protocol.FrameOpen {
 		a.log.Printf("connection rejected source=%s user=%s session=%s reason=invalid_open", source, clientHello.ClientID, session.ID())
 		_ = writer.presetError(errorInvalidRequest, "invalid request")
 		return

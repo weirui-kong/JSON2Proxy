@@ -12,6 +12,18 @@
     "provider": "none",
     "participation": 0
   },
+  "udp": {
+    "enabled": true,
+    "idle_timeout": "2m",
+    "max_datagram_size": 61440,
+    "queue_packets": 256,
+    "max_associations_per_user": 256,
+    "max_destinations_per_association": 1024,
+    "packets_per_second_per_user": 10000,
+    "bytes_per_second_per_user": 67108864,
+    "dns_cache_ttl": "30s",
+    "dns_negative_ttl": "5s"
+  },
   "users": [
     {
       "client_id": "demo-user",

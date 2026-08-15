@@ -33,8 +33,22 @@ type Server struct {
 	LogFile          string      `json:"log_file"`
 	Performance      Performance `json:"performance"`
 	Obfs             obfs.Config `json:"obfs"`
+	UDP              ServerUDP   `json:"udp"`
 	Outbound         Outbound    `json:"outbound,omitempty"`
 	Users            []User      `json:"users"`
+}
+
+type ServerUDP struct {
+	Enabled                       *bool  `json:"enabled,omitempty"`
+	IdleTimeout                   string `json:"idle_timeout"`
+	MaxDatagramSize               int    `json:"max_datagram_size"`
+	QueuePackets                  int    `json:"queue_packets"`
+	MaxAssociationsPerUser        int    `json:"max_associations_per_user"`
+	MaxDestinationsPerAssociation int    `json:"max_destinations_per_association"`
+	PacketsPerSecondPerUser       int    `json:"packets_per_second_per_user"`
+	BytesPerSecondPerUser         int64  `json:"bytes_per_second_per_user"`
+	DNSCacheTTL                   string `json:"dns_cache_ttl"`
+	DNSNegativeTTL                string `json:"dns_negative_ttl"`
 }
 
 type Outbound struct {
@@ -65,7 +79,21 @@ type Client struct {
 	LogFile          string      `json:"log_file"`
 	Performance      Performance `json:"performance"`
 	Obfs             obfs.Config `json:"obfs"`
+	UDP              ClientUDP   `json:"udp"`
 }
+
+type ClientUDP struct {
+	Enabled         *bool  `json:"enabled,omitempty"`
+	Bind            string `json:"bind"`
+	IdleTimeout     string `json:"idle_timeout"`
+	MaxDatagramSize int    `json:"max_datagram_size"`
+	QueuePackets    int    `json:"queue_packets"`
+}
+
+func boolValue(value bool) *bool { return &value }
+
+func (u ClientUDP) IsEnabled() bool { return u.Enabled == nil || *u.Enabled }
+func (u ServerUDP) IsEnabled() bool { return u.Enabled == nil || *u.Enabled }
 
 func Load(path string, v any) error {
 	data, err := os.ReadFile(path)
@@ -107,6 +135,36 @@ func (s *Server) Defaults() {
 	if s.Obfs.Provider == "" {
 		s.Obfs.Provider = "none"
 	}
+	if s.UDP.Enabled == nil {
+		s.UDP.Enabled = boolValue(true)
+	}
+	if s.UDP.IdleTimeout == "" {
+		s.UDP.IdleTimeout = "2m"
+	}
+	if s.UDP.MaxDatagramSize == 0 {
+		s.UDP.MaxDatagramSize = 60 << 10
+	}
+	if s.UDP.QueuePackets == 0 {
+		s.UDP.QueuePackets = 256
+	}
+	if s.UDP.MaxAssociationsPerUser == 0 {
+		s.UDP.MaxAssociationsPerUser = 256
+	}
+	if s.UDP.MaxDestinationsPerAssociation == 0 {
+		s.UDP.MaxDestinationsPerAssociation = 1024
+	}
+	if s.UDP.PacketsPerSecondPerUser == 0 {
+		s.UDP.PacketsPerSecondPerUser = 10000
+	}
+	if s.UDP.BytesPerSecondPerUser == 0 {
+		s.UDP.BytesPerSecondPerUser = 64 << 20
+	}
+	if s.UDP.DNSCacheTTL == "" {
+		s.UDP.DNSCacheTTL = "30s"
+	}
+	if s.UDP.DNSNegativeTTL == "" {
+		s.UDP.DNSNegativeTTL = "5s"
+	}
 	if s.Outbound.Enabled() && s.Outbound.DNS == "" {
 		s.Outbound.DNS = "local"
 	}
@@ -140,6 +198,26 @@ func (c *Client) Defaults() {
 	if c.Obfs.Provider == "" {
 		c.Obfs.Provider = "none"
 	}
+	if c.UDP.Enabled == nil {
+		c.UDP.Enabled = boolValue(true)
+	}
+	if c.UDP.Bind == "" {
+		host, _, err := net.SplitHostPort(c.SocksListen)
+		if err == nil && host != "" {
+			c.UDP.Bind = net.JoinHostPort(host, "0")
+		} else {
+			c.UDP.Bind = "127.0.0.1:0"
+		}
+	}
+	if c.UDP.IdleTimeout == "" {
+		c.UDP.IdleTimeout = "2m"
+	}
+	if c.UDP.MaxDatagramSize == 0 {
+		c.UDP.MaxDatagramSize = 60 << 10
+	}
+	if c.UDP.QueuePackets == 0 {
+		c.UDP.QueuePackets = 256
+	}
 }
 
 func (s Server) Validate() error {
@@ -159,6 +237,9 @@ func (s Server) Validate() error {
 		return err
 	}
 	if err := s.Performance.Validate(); err != nil {
+		return err
+	}
+	if err := validateServerUDP(s.UDP); err != nil {
 		return err
 	}
 	if err := validateOutbound(s.Outbound); err != nil {
@@ -226,6 +307,9 @@ func (c Client) Validate() error {
 	if err := c.Performance.Validate(); err != nil {
 		return err
 	}
+	if err := validateClientUDP(c.UDP); err != nil {
+		return err
+	}
 	for name, value := range map[string]string{
 		"connect_timeout": c.ConnectTimeout, "handshake_timeout": c.HandshakeTimeout,
 		"idle_timeout": c.IdleTimeout,
@@ -250,6 +334,51 @@ func (p Performance) Validate() error {
 	default:
 		return errors.New("performance.mode must be interactive or throughput")
 	}
+}
+
+func validateClientUDP(value ClientUDP) error {
+	if _, err := Duration(value.IdleTimeout); err != nil {
+		return fmt.Errorf("udp.idle_timeout: %w", err)
+	}
+	host, port, err := net.SplitHostPort(value.Bind)
+	if err != nil || host == "" || port != "0" || net.ParseIP(host) == nil {
+		return errors.New("udp.bind must be an IP address with port 0")
+	}
+	if value.MaxDatagramSize < 512 || value.MaxDatagramSize > 60<<10 {
+		return errors.New("udp.max_datagram_size must be between 512 and 61440")
+	}
+	if value.QueuePackets < 1 || value.QueuePackets > 4096 {
+		return errors.New("udp.queue_packets must be between 1 and 4096")
+	}
+	return nil
+}
+
+func validateServerUDP(value ServerUDP) error {
+	if _, err := Duration(value.IdleTimeout); err != nil {
+		return fmt.Errorf("udp.idle_timeout: %w", err)
+	}
+	if value.MaxDatagramSize < 512 || value.MaxDatagramSize > 60<<10 {
+		return errors.New("udp.max_datagram_size must be between 512 and 61440")
+	}
+	if value.QueuePackets < 1 || value.QueuePackets > 4096 {
+		return errors.New("udp.queue_packets must be between 1 and 4096")
+	}
+	if value.MaxAssociationsPerUser < 1 || value.MaxAssociationsPerUser > 65535 {
+		return errors.New("udp.max_associations_per_user must be between 1 and 65535")
+	}
+	if value.MaxDestinationsPerAssociation < 1 || value.MaxDestinationsPerAssociation > 65535 {
+		return errors.New("udp.max_destinations_per_association must be between 1 and 65535")
+	}
+	if value.PacketsPerSecondPerUser < 1 || value.BytesPerSecondPerUser < 1 {
+		return errors.New("UDP per-user rate limits must be positive")
+	}
+	if _, err := Duration(value.DNSCacheTTL); err != nil {
+		return fmt.Errorf("udp.dns_cache_ttl: %w", err)
+	}
+	if _, err := Duration(value.DNSNegativeTTL); err != nil {
+		return fmt.Errorf("udp.dns_negative_ttl: %w", err)
+	}
+	return nil
 }
 
 func validateObfs(value obfs.Config) error {

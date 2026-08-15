@@ -91,6 +91,20 @@ func (c *Client) DialContext(ctx context.Context, network, target string) (net.C
 }
 
 func (c *Client) handshake(conn net.Conn, target string) error {
+	if err := c.negotiate(conn); err != nil {
+		return err
+	}
+	request, err := connectRequest(target)
+	if err != nil {
+		return err
+	}
+	if err = writeAll(conn, request); err != nil {
+		return fmt.Errorf("write SOCKS5 CONNECT: %w", err)
+	}
+	return readConnectReply(conn)
+}
+
+func (c *Client) negotiate(conn net.Conn) error {
 	method := byte(methodNoAuth)
 	if c.username != "" {
 		method = methodUserPass
@@ -116,14 +130,7 @@ func (c *Client) handshake(conn net.Conn, target string) error {
 			return err
 		}
 	}
-	request, err := connectRequest(target)
-	if err != nil {
-		return err
-	}
-	if err = writeAll(conn, request); err != nil {
-		return fmt.Errorf("write SOCKS5 CONNECT: %w", err)
-	}
-	return readConnectReply(conn)
+	return nil
 }
 
 func (c *Client) authenticate(conn net.Conn) error {
