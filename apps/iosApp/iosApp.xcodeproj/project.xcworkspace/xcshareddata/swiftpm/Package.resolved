@@ -6,7 +6,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supacode-org/terminal-ui",
       "state" : {
-        "revision" : "8833423efd5f791dbaeae3660218a341b139152a",
+        "revision" : "ef4e497a999d4f56c43de5210af8ad19efa49649",
         "version" : "0.1.0"
       }
     }
