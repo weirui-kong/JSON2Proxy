@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 import Shared
+import TerminalUI
 import UIKit
 
 /// The scanner's verdict on a payload: accept a value, or reject it with a
@@ -24,11 +25,13 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
         static let bracketLength: CGFloat = 26
         static let bracketLineWidth: CGFloat = 5
         static let codeHighlightPadding: CGFloat = 10
-        static let buttonSide: CGFloat = 44
-        static let buttonCornerRadius: CGFloat = 8
+        static let buttonSide: CGFloat = TerminalSize.touch
+        static let buttonCornerRadius: CGFloat = TerminalRadius.md
+        static let buttonIconSide: CGFloat = 20
+        static let hintIconSide: CGFloat = 18
         static let hintHeight: CGFloat = 44
         static let hintBottomInset: CGFloat = 24
-        static let dimAlpha: CGFloat = 0.35
+        static let dimAlpha: CGFloat = TerminalOpacity.cameraDim
         static let successDismissDelay: TimeInterval = 0.35
         static let hintResetDelay: TimeInterval = 2
     }
@@ -50,10 +53,10 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
     private var viewfinderRect: CGRect = .zero
 
     private lazy var closeButton = makeSquareButton(
-        systemImageName: "xmark", label: String(localized: "Close"), action: #selector(closeTapped)
+        icon: .close, label: String(localized: "Close"), action: #selector(closeTapped)
     )
     private lazy var torchButton = makeSquareButton(
-        systemImageName: "flashlight.off.fill", label: String(localized: "Flashlight"), action: #selector(torchTapped)
+        icon: .flashlightOff, label: String(localized: "Flashlight"), action: #selector(torchTapped)
     )
     private let hintView = UIView()
 
@@ -62,9 +65,9 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
 
     private let hintLabel: UILabel = {
         let label = UILabel()
-        label.font = Mono.uiFont(Mono.regular, size: 13, style: .subheadline)
+        label.font = TerminalFonts.uiFont(TerminalFonts.regular, size: TerminalType.Size.small, relativeTo: .subheadline)
         label.adjustsFontForContentSizeCategory = true
-        label.textColor = UIColor(argb: Palette.shared.textPrimary)
+        label.textColor = TerminalUIColors.textPrimary
         label.numberOfLines = 2
         label.lineBreakMode = .byTruncatingMiddle
         return label
@@ -100,7 +103,7 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(argb: Palette.shared.canvas)
+        view.backgroundColor = TerminalUIColors.canvas
         setupOverlay()
     }
 
@@ -220,7 +223,7 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
         dimLayer.fillColor = UIColor.black.withAlphaComponent(Layout.dimAlpha).cgColor
         view.layer.addSublayer(dimLayer)
 
-        bracketLayer.strokeColor = UIColor(argb: Palette.shared.accent).cgColor
+        bracketLayer.strokeColor = cgColor(TerminalUIColors.accent)
         bracketLayer.fillColor = UIColor.clear.cgColor
         bracketLayer.lineWidth = Layout.bracketLineWidth
         bracketLayer.lineCap = .round
@@ -309,7 +312,7 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
         animation.damping = 18
         animation.duration = animation.settlingDuration
         bracketLayer.path = newPath
-        bracketLayer.strokeColor = UIColor(argb: Palette.shared.accent).cgColor
+        bracketLayer.strokeColor = cgColor(TerminalUIColors.accent)
         bracketLayer.add(animation, forKey: "snap")
     }
 
@@ -335,13 +338,13 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
 
     private func showRejection(_ message: String) {
         hintResetWorkItem?.cancel()
-        hintIcon.image = UIImage(systemName: "exclamationmark.triangle.fill")
-        hintIcon.tintColor = UIColor(argb: Palette.shared.dangerText)
+        hintIcon.image = Self.iconImage(.warning, side: Layout.hintIconSide)
+        hintIcon.tintColor = TerminalUIColors.dangerText
         hintLabel.text = message
-        hintLabel.textColor = UIColor(argb: Palette.shared.dangerText)
-        hintView.backgroundColor = UIColor(argb: Palette.shared.dangerBackground)
-        hintView.layer.borderColor = UIColor(argb: Palette.shared.danger).cgColor
-        bracketLayer.strokeColor = UIColor(argb: Palette.shared.danger).cgColor
+        hintLabel.textColor = TerminalUIColors.dangerText
+        hintView.backgroundColor = TerminalUIColors.dangerBg
+        hintView.layer.borderColor = cgColor(TerminalUIColors.danger)
+        bracketLayer.strokeColor = cgColor(TerminalUIColors.danger)
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.showHint()
@@ -354,31 +357,44 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
     /// The terminal hint card: `>` then the instruction.
     private func showHint() {
         hintIcon.image = Self.promptImage
-        hintIcon.tintColor = UIColor(argb: Palette.shared.accent)
+        hintIcon.tintColor = TerminalUIColors.accentText
         hintLabel.text = hint
-        hintLabel.textColor = UIColor(argb: Palette.shared.textPrimary)
-        hintView.backgroundColor = UIColor(argb: Palette.shared.surface)
-        hintView.layer.borderColor = UIColor(argb: Palette.shared.border).cgColor
-        if !isHandled { bracketLayer.strokeColor = UIColor(argb: Palette.shared.accent).cgColor }
+        hintLabel.textColor = TerminalUIColors.textPrimary
+        hintView.backgroundColor = TerminalUIColors.surface
+        hintView.layer.borderColor = cgColor(TerminalUIColors.border)
+        if !isHandled { bracketLayer.strokeColor = cgColor(TerminalUIColors.accent) }
     }
 
     /// `>` drawn as an image so it sits in the icon slot; decorative.
     private static let promptImage: UIImage = {
-        let font = Mono.uiFont(Mono.bold, size: 15, style: .body)
-        let text = NSAttributedString(string: ">", attributes: [.font: font])
+        let font = TerminalFonts.uiFont(TerminalFonts.bold, size: TerminalType.Size.body, relativeTo: .body)
+        let text = NSAttributedString(string: TerminalGlyph.selected, attributes: [.font: font])
         let size = text.size()
         return UIGraphicsImageRenderer(size: size).image { _ in text.draw(at: .zero) }.withRenderingMode(.alwaysTemplate)
     }()
 
-    private func makeSquareButton(systemImageName: String, label: String, action: Selector) -> UIButton {
+    /// A library icon drawn at `side` points, as a template image for `tintColor`.
+    private static func iconImage(_ icon: TerminalIcon, side: CGFloat) -> UIImage? {
+        guard let image = icon.uiImage else { return nil }
+        let size = CGSize(width: side, height: side)
+        return UIGraphicsImageRenderer(size: size).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
+            .withRenderingMode(.alwaysTemplate)
+    }
+
+    /// Layer colors do not follow the appearance, so they are resolved for this (dark) screen.
+    private func cgColor(_ color: UIColor) -> CGColor {
+        color.resolvedColor(with: traitCollection).cgColor
+    }
+
+    private func makeSquareButton(icon: TerminalIcon, label: String, action: Selector) -> UIButton {
         let button = UIButton(type: .system)
-        button.setImage(UIImage(systemName: systemImageName, withConfiguration: UIImage.SymbolConfiguration(textStyle: .body, scale: .medium)), for: .normal)
-        button.tintColor = UIColor(argb: Palette.shared.textPrimary)
-        button.backgroundColor = UIColor(argb: Palette.shared.surface)
+        button.setImage(Self.iconImage(icon, side: Layout.buttonIconSide), for: .normal)
+        button.tintColor = TerminalUIColors.textPrimary
+        button.backgroundColor = TerminalUIColors.surface
         button.layer.cornerRadius = Layout.buttonCornerRadius
         button.layer.cornerCurve = .continuous
         button.layer.borderWidth = 1
-        button.layer.borderColor = UIColor(argb: Palette.shared.border).cgColor
+        button.layer.borderColor = cgColor(TerminalUIColors.border)
         button.accessibilityLabel = label
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
@@ -418,7 +434,7 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
         let isOn = device.torchMode != .on
         device.torchMode = isOn ? .on : .off
         device.unlockForConfiguration()
-        sender.setImage(UIImage(systemName: isOn ? "flashlight.on.fill" : "flashlight.off.fill", withConfiguration: UIImage.SymbolConfiguration(textStyle: .body, scale: .large)), for: .normal)
-        sender.tintColor = UIColor(argb: isOn ? Palette.shared.warning : Palette.shared.textPrimary)
+        sender.setImage(Self.iconImage(isOn ? .flashlightOn : .flashlightOff, side: Layout.buttonIconSide), for: .normal)
+        sender.tintColor = isOn ? TerminalUIColors.warning : TerminalUIColors.textPrimary
     }
 }

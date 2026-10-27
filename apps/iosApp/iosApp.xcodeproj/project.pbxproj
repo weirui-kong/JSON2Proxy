@@ -10,6 +10,7 @@
 		A10000000000000000000014 /* Json2ProxyCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000000000000000000006 /* Json2ProxyCore.xcframework */; };
 		A10000000000000000000015 /* Json2ProxyCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000000000000000000006 /* Json2ProxyCore.xcframework */; };
 		A10000000000000000000016 /* PacketTunnel.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000003 /* PacketTunnel.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A10000000000000000000070 /* TerminalUI in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000072 /* TerminalUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -66,6 +67,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000014 /* Json2ProxyCore.xcframework in Frameworks */,
+				A10000000000000000000070 /* TerminalUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -131,6 +133,9 @@
 				A10000000000000000000005 /* Common */,
 			);
 			name = iosApp;
+			packageProductDependencies = (
+				A10000000000000000000072 /* TerminalUI */,
+			);
 			productName = iosApp;
 			productReference = A10000000000000000000001 /* JSON2Proxy.app */;
 			productType = "com.apple.product-type.application";
@@ -184,6 +189,9 @@
 			);
 			mainGroup = A10000000000000000000020;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A10000000000000000000071 /* XCRemoteSwiftPackageReference "terminal-ui" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A10000000000000000000021 /* Products */;
 			projectDirPath = "";
@@ -486,6 +494,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A10000000000000000000071 /* XCRemoteSwiftPackageReference "terminal-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supacode-org/terminal-ui";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A10000000000000000000072 /* TerminalUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000000000000000000071 /* XCRemoteSwiftPackageReference "terminal-ui" */;
+			productName = TerminalUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A10000000000000000000040 /* Project object */;
 }

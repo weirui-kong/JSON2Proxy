@@ -1,22 +1,19 @@
 import Shared
 import SwiftUI
+import TerminalUI
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
         NavigationStack {
-            TerminalPage {
+            HomePage {
                 HStack {
-                    PromptTitle()
+                    TerminalPromptTitle(Glyph.command)
                     Spacer()
-                    Button {
+                    TerminalIconButton(.tune, label: String(localized: "Settings")) {
                         SettingsPresenter.present(model: model)
-                    } label: {
-                        SquareIcon(systemName: "slider.horizontal.3")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Text("Settings"))
                 }
                 SessionCard(
                     state: model.state,
@@ -27,7 +24,7 @@ struct ContentView: View {
                     unit: model.settings.trafficUnit
                 )
                 if case .failed = onEnum(of: model.state) {
-                    Banner(kind: .danger, text: model.state.label)
+                    TerminalBanner(model.state.label, kind: .danger, icon: .hidden)
                 }
                 connectButton
             } bottom: {
@@ -42,13 +39,13 @@ struct ContentView: View {
                             trailing: model.selectedProfile.flatMap { model.pings[$0.server] }.map { ($0.label, $0.grade.color) }
                         )
                     }
-                    CardDivider()
+                    TerminalCardDivider()
                     Button {
                         SettingsPresenter.present(model: model)
                     } label: {
                         NavRow(label: String(localized: "Routing"), title: model.settings.routingMode.title)
                     }
-                    CardDivider()
+                    TerminalCardDivider()
                     Button {
                         SettingsPresenter.present(model: model)
                     } label: {
@@ -56,8 +53,8 @@ struct ContentView: View {
                             label: String(localized: "Kill switch"),
                             title: nil,
                             trailing: model.settings.killSwitch
-                                ? (String(localized: "On"), Colors.accent)
-                                : (String(localized: "Off"), Colors.textSecondary)
+                                ? (String(localized: "On"), TerminalColors.accentText)
+                                : (String(localized: "Off"), TerminalColors.textSecondary)
                         )
                     }
                 }
@@ -78,17 +75,18 @@ struct ContentView: View {
         if model.state.isActive {
             let label = String(localized: "Disconnect")
             Button(action: model.disconnect) {
-                Text(verbatim: Glyph.disconnect(label)).frame(maxWidth: .infinity)
+                // The small size of the outlined actions, as before the library.
+                Text(verbatim: TerminalGlyph.bracketed(label)).font(TerminalType.small)
             }
-            .buttonStyle(SecondaryButtonStyle(color: Colors.danger, borderColor: Colors.danger, background: .clear, height: 52))
+            .buttonStyle(TerminalButtonStyle(.danger, size: .lg, block: true))
             .disabled(isDisconnecting)
             .accessibilityLabel(Text(label))
         } else {
             let label = String(localized: "Connect")
             Button(action: model.connect) {
-                Text(verbatim: Glyph.connect(label)).frame(maxWidth: .infinity)
+                Text(verbatim: TerminalGlyph.prompted(label))
             }
-            .buttonStyle(PrimaryButtonStyle(height: 52))
+            .buttonStyle(TerminalButtonStyle(.primary, size: .lg, block: true))
             .disabled(model.selectedProfile == nil)
             .accessibilityLabel(Text(label))
         }
@@ -111,11 +109,11 @@ private struct SessionCard: View {
 
     private var stateValue: (String, Color) {
         switch onEnum(of: state) {
-        case .connected: (Glyph.stateConnected, Colors.accent)
-        case .connecting: (Glyph.stateConnecting, Colors.warning)
-        case .disconnecting: (Glyph.stateDisconnecting, Colors.warning)
-        case .failed: (Glyph.stateFailed, Colors.danger)
-        case .disconnected: (Glyph.stateDisconnected, Colors.textSecondary)
+        case .connected: (Glyph.stateConnected, TerminalColors.accentText)
+        case .connecting: (Glyph.stateConnecting, TerminalColors.warning)
+        case .disconnecting: (Glyph.stateDisconnecting, TerminalColors.warning)
+        case .failed: (Glyph.stateFailed, TerminalColors.danger)
+        case .disconnected: (Glyph.stateDisconnected, TerminalColors.textSecondary)
         }
     }
 
@@ -124,45 +122,45 @@ private struct SessionCard: View {
             HStack {
                 Text(verbatim: Glyph.sessionFile)
                 Spacer()
-                let dot = isLive ? Colors.accent : Colors.textSecondary
-                Circle().fill(dot).frame(width: 7, height: 7)
-                Text(verbatim: isLive ? Glyph.live : Glyph.idle).foregroundStyle(dot)
+                Circle().fill(isLive ? TerminalColors.accent : TerminalColors.textSecondary).frame(width: 7, height: 7)
+                Text(verbatim: isLive ? Glyph.live : Glyph.idle)
+                    .foregroundStyle(isLive ? TerminalColors.accentText : TerminalColors.textSecondary)
             }
-            .font(Typo.label)
-            .foregroundStyle(Colors.textSecondary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .font(TerminalType.label)
+            .foregroundStyle(TerminalColors.textSecondary)
+            .padding(.horizontal, TerminalSpacing.space14)
+            .padding(.vertical, TerminalSpacing.space10)
             .accessibilityHidden(true)
-            CardDivider()
+            TerminalCardDivider()
             json
-                .font(Typo.code)
+                .font(TerminalType.code)
                 .lineSpacing(6)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.horizontal, TerminalSpacing.space14)
+                .padding(.vertical, TerminalSpacing.space12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement()
                 .accessibilityLabel(Text("\(state.label), routing: \(routing.title)"))
-            CardDivider()
+            TerminalCardDivider()
             if isLive, let traffic {
                 TrafficPanel(traffic: traffic, history: history, unit: unit)
             } else {
-                Note(String(localized: "Live traffic appears once connected")).padding(14)
+                TerminalNote(String(localized: "Live traffic appears once connected")).padding(TerminalSpacing.space14)
             }
         }
     }
 
     private var json: Text {
-        let punctuation = Colors.textSecondary
+        let punctuation = TerminalColors.textSecondary
         func key(_ name: String) -> Text {
-            Text(verbatim: "  ") + Text(verbatim: "\"\(name)\"").foregroundColor(Colors.syntaxKey) + Text(verbatim: ": ").foregroundColor(punctuation)
+            Text(verbatim: "  ") + Text(verbatim: "\"\(name)\"").foregroundColor(TerminalColors.syntaxKey) + Text(verbatim: ": ").foregroundColor(punctuation)
         }
         let (value, color) = stateValue
-        let serverValue = server.map { Text(verbatim: "\"\($0)\"").foregroundColor(Colors.syntaxString) }
-            ?? Text(verbatim: Glyph.null).foregroundColor(Colors.syntaxNumber)
+        let serverValue = server.map { Text(verbatim: "\"\($0)\"").foregroundColor(TerminalColors.syntaxString) }
+            ?? Text(verbatim: Glyph.null).foregroundColor(TerminalColors.syntaxNumber)
         return Text(verbatim: "{\n").foregroundColor(punctuation)
             + key(Glyph.keyState) + Text(verbatim: "\"\(value)\"").foregroundColor(color) + Text(verbatim: ",\n").foregroundColor(punctuation)
             + key(Glyph.keyServer) + serverValue + Text(verbatim: ",\n").foregroundColor(punctuation)
-            + key(Glyph.keyRouting) + Text(verbatim: "\"\(routing.wire)\"").foregroundColor(Colors.syntaxString)
+            + key(Glyph.keyRouting) + Text(verbatim: "\"\(routing.wire)\"").foregroundColor(TerminalColors.syntaxString)
             + Text(verbatim: "\n}").foregroundColor(punctuation)
     }
 }
@@ -175,30 +173,32 @@ private struct TrafficPanel: View {
     var body: some View {
         let download = TrafficFormat.shared.rate(bytesPerSecond: traffic.downloadSpeed, unit: unit)
         let upload = TrafficFormat.shared.rate(bytesPerSecond: traffic.uploadSpeed, unit: unit)
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: TerminalSpacing.space10) {
             HStack {
-                Note(String(localized: "traffic · 60 s"))
+                TerminalNote(String(localized: "traffic · 60 s"))
                 Spacer()
-                Legend(color: Colors.syntaxKey, label: String(localized: "Download"))
-                Legend(color: Colors.syntaxNumber, label: String(localized: "Upload"))
+                TerminalChartLegend(download: String(localized: "Download"), upload: String(localized: "Upload"))
             }
-            TrafficChart(history: history, description: String(localized: "Download \(download), upload \(upload)"))
-            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+            TerminalTrafficChart(
+                history.map { TerminalTrafficPoint(up: Double($0.uploadSpeed), down: Double($0.downloadSpeed)) },
+                label: String(localized: "Download \(download), upload \(upload)")
+            )
+            Grid(horizontalSpacing: TerminalSpacing.space8, verticalSpacing: TerminalSpacing.space8) {
                 GridRow {
-                    StatCell(glyph: Glyph.download, label: String(localized: "Download"), value: download, color: Colors.syntaxKey)
-                    StatCell(glyph: Glyph.upload, label: String(localized: "Upload"), value: upload, color: Colors.syntaxNumber)
+                    StatCell(glyph: TerminalGlyph.download, label: String(localized: "Download"), value: download, color: TerminalColors.syntaxKey)
+                    StatCell(glyph: TerminalGlyph.upload, label: String(localized: "Upload"), value: upload, color: TerminalColors.syntaxNumber)
                 }
                 GridRow {
-                    StatCell(glyph: nil, label: Glyph.tcp, value: String(traffic.tcpConnections), color: Colors.textPrimary)
-                    StatCell(glyph: nil, label: Glyph.udp, value: String(traffic.udpConnections), color: Colors.textPrimary)
+                    StatCell(glyph: nil, label: Glyph.tcp, value: String(traffic.tcpConnections), color: TerminalColors.textPrimary)
+                    StatCell(glyph: nil, label: Glyph.udp, value: String(traffic.udpConnections), color: TerminalColors.textPrimary)
                 }
             }
             TotalLine(traffic: traffic, unit: unit)
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 12)
-        .padding(.bottom, 14)
+        .padding(.horizontal, TerminalSpacing.space14)
+        .padding(.top, TerminalSpacing.space12)
+        .padding(.bottom, TerminalSpacing.space14)
     }
 }
 
@@ -210,13 +210,13 @@ private struct TotalLine: View {
     var body: some View {
         let download = TrafficFormat.shared.amount(bytes: traffic.cumulativeDownload, unit: unit)
         let upload = TrafficFormat.shared.amount(bytes: traffic.cumulativeUpload, unit: unit)
-        (Text("Total").foregroundColor(Colors.textSecondary)
-            + Text(verbatim: " \(Glyph.download) ").foregroundColor(Colors.syntaxKey)
-            + Text(verbatim: download).foregroundColor(Colors.textPrimary)
-            + Text(verbatim: Glyph.footerSeparator).foregroundColor(Colors.textSecondary)
-            + Text(verbatim: "\(Glyph.upload) ").foregroundColor(Colors.syntaxNumber)
-            + Text(verbatim: upload).foregroundColor(Colors.textPrimary))
-            .font(Typo.caption)
+        (Text("Total").foregroundColor(TerminalColors.textSecondary)
+            + Text(verbatim: " \(TerminalGlyph.download) ").foregroundColor(TerminalColors.syntaxKey)
+            + Text(verbatim: download).foregroundColor(TerminalColors.textPrimary)
+            + Text(verbatim: Glyph.footerSeparator).foregroundColor(TerminalColors.textSecondary)
+            + Text(verbatim: "\(TerminalGlyph.upload) ").foregroundColor(TerminalColors.syntaxNumber)
+            + Text(verbatim: upload).foregroundColor(TerminalColors.textPrimary))
+            .font(TerminalType.caption)
             .lineLimit(1)
             .accessibilityElement()
             .accessibilityLabel(Text("Total downloaded \(download), uploaded \(upload)"))
@@ -229,15 +229,15 @@ private struct SystemFooter: View {
     let memory: MemoryUsage?
 
     var body: some View {
-        let system = Text(verbatim: Self.systemLine).foregroundColor(Colors.textSecondary)
+        let system = Text(verbatim: Self.systemLine).foregroundColor(TerminalColors.textSecondary)
         Group {
             if let memory {
                 let used = TrafficFormat.shared.amount(bytes: memory.usedBytes, unit: .bytes)
                 let limit = memory.limitBytes.map { TrafficFormat.shared.amount(bytes: $0.int64Value, unit: .bytes) }
                 let value = limit.map { "\(used) / \($0)" } ?? used
-                (Text(verbatim: "\(Glyph.memory) ").foregroundColor(Colors.textSecondary)
+                (Text(verbatim: "\(Glyph.memory) ").foregroundColor(TerminalColors.textSecondary)
                     + Text(verbatim: value).foregroundColor(memory.pressure.color)
-                    + Text(verbatim: Glyph.footerSeparator).foregroundColor(Colors.textSecondary)
+                    + Text(verbatim: Glyph.footerSeparator).foregroundColor(TerminalColors.textSecondary)
                     + system)
                     .accessibilityElement()
                     .accessibilityLabel(Text(limit.map { "Network extension memory \(used) of \($0)" } ?? "Network extension memory \(used)")
@@ -246,7 +246,7 @@ private struct SystemFooter: View {
                 system
             }
         }
-        .font(Typo.caption)
+        .font(TerminalType.caption)
         .lineLimit(1)
         .minimumScaleFactor(0.8)
     }
@@ -270,21 +270,9 @@ private struct SystemFooter: View {
 private extension MemoryPressure {
     var color: Color {
         switch self {
-        case .normal: Colors.textSecondary
-        case .elevated: Colors.warning
-        case .critical: Colors.danger
-        }
-    }
-}
-
-private struct Legend: View {
-    let color: Color
-    let label: String
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Rectangle().fill(color).frame(width: 10, height: 2)
-            Text(label).font(Typo.caption).foregroundStyle(Colors.textSecondary)
+        case .normal: TerminalColors.textSecondary
+        case .elevated: TerminalColors.warning
+        case .critical: TerminalColors.danger
         }
     }
 }
@@ -297,21 +285,21 @@ private struct StatCell: View {
     let color: Color
 
     var body: some View {
-        let (number, unit) = splitRate(value)
-        VStack(alignment: .leading, spacing: 2) {
+        let (number, unit) = TerminalValueFormat.split(value)
+        VStack(alignment: .leading, spacing: TerminalSpacing.space2) {
             HStack(spacing: 0) {
-                if let glyph { GlyphText(text: glyph + " ", font: Typo.caption) }
-                Text(label).font(Typo.caption).foregroundStyle(Colors.textSecondary)
+                if let glyph { TerminalGlyphText(glyph + " ", font: TerminalType.caption) }
+                Text(label).font(TerminalType.caption).foregroundStyle(TerminalColors.textSecondary)
             }
-            (Text(verbatim: number).foregroundColor(color) + Text(verbatim: unit.isEmpty ? "" : " \(unit)").foregroundColor(Colors.textSecondary))
-                .font(Typo.stat)
+            (Text(verbatim: number).foregroundColor(color) + Text(verbatim: unit.isEmpty ? "" : " \(unit)").foregroundColor(TerminalColors.textSecondary))
+                .font(TerminalType.stat)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, TerminalSpacing.space10)
+        .padding(.vertical, TerminalSpacing.space8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Colors.border))
+        .overlay(RoundedRectangle(cornerRadius: TerminalRadius.md, style: .continuous).strokeBorder(TerminalColors.border))
         .accessibilityElement(children: .combine)
     }
 }
@@ -324,40 +312,63 @@ private struct NavRow: View {
     var trailing: (String, Color)?
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text(label).font(Typo.small).foregroundStyle(Colors.textSecondary).frame(width: 96, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: TerminalSpacing.space12) {
+            Text(label).font(TerminalType.small).foregroundStyle(TerminalColors.textSecondary).frame(width: 96, alignment: .leading)
+            VStack(alignment: .leading, spacing: TerminalSpacing.space2) {
                 if let title {
-                    Text(title).font(Typo.bodyMedium).foregroundStyle(Colors.textPrimary).lineLimit(1)
+                    Text(title).font(TerminalType.bodyMedium).foregroundStyle(TerminalColors.textPrimary).lineLimit(1)
                 }
                 if let subtitle {
-                    Text(verbatim: subtitle).font(Typo.label).foregroundStyle(Colors.textSecondary).lineLimit(1)
+                    Text(verbatim: subtitle).font(TerminalType.label).foregroundStyle(TerminalColors.textSecondary).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
             if let trailing {
-                Text(trailing.0).font(Typo.small).foregroundStyle(trailing.1).lineLimit(1)
+                Text(trailing.0).font(TerminalType.small).foregroundStyle(trailing.1).lineLimit(1)
             }
-            GlyphText(text: Glyph.next)
+            TerminalGlyphText(TerminalGlyph.next)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(minHeight: 52)
+        .padding(.horizontal, TerminalSpacing.space14)
+        .padding(.vertical, TerminalSpacing.space10)
+        .frame(minHeight: TerminalSize.row)
         .contentShape(Rectangle())
     }
 }
 
-/// 44×44 outlined icon, used as the label of buttons and links.
-struct SquareIcon: View {
-    let systemName: String
-    var tint = Colors.textPrimary
+/// The home page: `TerminalPage`'s layout plus a one-line `footer` that sits in the bottom
+/// safe-area inset, just above the home indicator, and scrolls with the page.
+/// The library page has no slot in the inset, so the home screen keeps this one.
+private struct HomePage<Content: View, Bottom: View, Footer: View>: View {
+    @ViewBuilder var content: Content
+    @ViewBuilder var bottom: Bottom
+    @ViewBuilder var footer: Footer
+
+    /// Leaves the lower part of the 34 pt home indicator inset free.
+    private static var footerHeight: CGFloat { TerminalSpacing.space20 }
 
     var body: some View {
-        Image(systemName: systemName)
-            .font(.system(size: 17, weight: .medium))
-            .foregroundStyle(tint)
-            .frame(width: 44, height: 44)
-            .background(Colors.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Colors.border))
+        GeometryReader { geometry in
+            let inset = geometry.safeAreaInsets.bottom
+            ScrollView {
+                VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: TerminalSpacing.space20) {
+                        content
+                        Spacer(minLength: 0)
+                        bottom
+                    }
+                    .padding(.horizontal, TerminalSpacing.space20)
+                    .padding(.vertical, TerminalSpacing.space16)
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .topLeading)
+                    footer
+                        .padding(.horizontal, TerminalSpacing.space20)
+                        .frame(maxWidth: .infinity, minHeight: Self.footerHeight)
+                    // Keeps the end of the page above the home indicator when scrolled down.
+                    Color.clear.frame(height: max(inset - Self.footerHeight, 0))
+                }
+            }
+            .ignoresSafeArea(.container, edges: .bottom)
+        }
+        .background(TerminalColors.canvas.ignoresSafeArea())
+        .foregroundStyle(TerminalColors.textPrimary)
     }
 }

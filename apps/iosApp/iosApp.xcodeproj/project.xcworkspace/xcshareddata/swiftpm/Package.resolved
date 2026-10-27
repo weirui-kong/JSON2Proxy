@@ -1,0 +1,15 @@
+{
+  "originHash" : "e58a2fee04f87fa21fe53280e7b0d1f0aab62f661c51d93a8b6e63905ebb4f7b",
+  "pins" : [
+    {
+      "identity" : "terminal-ui",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/supacode-org/terminal-ui",
+      "state" : {
+        "revision" : "8833423efd5f791dbaeae3660218a341b139152a",
+        "version" : "0.1.0"
+      }
+    }
+  ],
+  "version" : 3
+}

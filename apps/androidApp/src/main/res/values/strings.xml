@@ -166,6 +166,7 @@
     <string name="notice_purpose_skie">Exposes the shared module to Swift</string>
     <string name="notice_purpose_androidx">Android interface, lifecycle and camera</string>
     <string name="notice_purpose_zxing">Generating and reading QR codes</string>
+    <string name="notice_purpose_terminal_ui">iOS interface components, theme and icons</string>
     <string name="notice_purpose_jetbrains_mono">Monospaced typeface of the interface</string>
     <string name="notice_purpose_material_icons">Android interface icons</string>
     <string name="notice_purpose_apnic">Source of the GeoIP CN address table</string>

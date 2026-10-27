@@ -1,6 +1,7 @@
 import CoreImage.CIFilterBuiltins
 import Shared
 import SwiftUI
+import TerminalUI
 
 /// Shows a saved server as a QR code for another device to scan.
 struct ServerQRCodeView: View {
@@ -11,48 +12,40 @@ struct ServerQRCodeView: View {
     var body: some View {
         NavigationStack {
             TerminalPage {
-                PathTitle(String(localized: "servers"), String(localized: "qr"))
+                TerminalPathTitle(String(localized: "servers"), String(localized: "qr"))
                 TerminalCard {
-                    HStack {
-                        Text(verbatim: Glyph.qrFile)
-                        Spacer()
-                        Text(verbatim: Glyph.linkScheme)
-                    }
-                    .font(Typo.label)
-                    .foregroundStyle(Colors.textSecondary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .accessibilityHidden(true)
-                    CardDivider()
-                    VStack(spacing: 14) {
+                    VStack(spacing: TerminalSpacing.space14) {
                         if let image = QRCodeImage.make(from: link) {
                             Image(uiImage: image)
                                 .interpolation(.none)
                                 .resizable()
                                 .scaledToFit()
-                                .padding(16)
+                                .padding(TerminalSpacing.space16)
                                 // The white card is the code's quiet zone, not a palette color.
-                                .background(.white, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                .background(.white, in: RoundedRectangle(cornerRadius: TerminalRadius.sm, style: .continuous))
                                 .frame(maxWidth: 280)
                                 .accessibilityLabel(Text("QR code for \(profile.name)"))
                         }
-                        Text(verbatim: profile.name).font(Typo.bodyBold).foregroundStyle(Colors.textPrimary)
-                        Text(verbatim: profile.server).font(Typo.label).foregroundStyle(Colors.textSecondary)
+                        Text(verbatim: profile.name).font(TerminalType.bodyBold).foregroundStyle(TerminalColors.textPrimary)
+                        Text(verbatim: profile.server).font(TerminalType.label).foregroundStyle(TerminalColors.textSecondary)
                     }
-                    .padding(20)
+                    .padding(TerminalSpacing.space20)
                     .frame(maxWidth: .infinity)
+                } header: {
+                    TerminalCardHeader(Glyph.qrFile) { Text(verbatim: Glyph.linkScheme) }
+                        .accessibilityHidden(true)
                 }
-            } bottom: {
-                Banner(
-                    kind: .warning,
-                    text: String(localized: "This QR code contains the server secret. Only let devices you trust scan it."),
-                    systemImage: "exclamationmark.triangle.fill"
+            } footer: {
+                // The warning sign is the banner's default icon.
+                TerminalBanner(
+                    String(localized: "This QR code contains the server secret. Only let devices you trust scan it."),
+                    kind: .warning
                 )
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button { dismiss() } label: { Label("Done", systemImage: "checkmark") }
+                    Button { dismiss() } label: { Label { Text("Done") } icon: { TerminalIcon.check.image } }
                         .labelStyle(.iconOnly)
                 }
             }

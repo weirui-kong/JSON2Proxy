@@ -1,4 +1,5 @@
 import SwiftUI
+import TerminalUI
 
 @main
 struct JSON2ProxyApp: App {
@@ -6,16 +7,18 @@ struct JSON2ProxyApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        Appearance.apply()
+        TerminalAppearance.apply()
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(model)
-                // Dark only, whatever the system appearance.
-                .preferredColorScheme(.dark)
-                .tint(Colors.accent)
+                // Light or dark, following the system appearance.
+                // Toolbar and link tints are text and icons, so they use the text green.
+                // Set inside terminalTheme(), whose own accent tint would otherwise win.
+                .tint(TerminalColors.accentText)
+                .terminalTheme()
                 .task { await model.observe() }
                 // Ask for network access right after installation (see NetworkAccess).
                 .task { await model.networkAccess.prime() }

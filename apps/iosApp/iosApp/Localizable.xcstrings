@@ -562,6 +562,16 @@
         }
       }
     },
+    "Interface components, theme and icons" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "介面的元件、主題與圖示"
+          }
+        }
+      }
+    },
     "Invalid address" : {
       "localizations" : {
         "zh-Hant" : {

@@ -1,5 +1,5 @@
-import Shared
 import SwiftUI
+import TerminalUI
 import UIKit
 
 /// Opens Settings full screen with UIKit's horizontal flip, which SwiftUI's
@@ -13,13 +13,13 @@ enum SettingsPresenter {
             SettingsView(onClose: { presented?.dismiss(animated: true) })
         }
         .environmentObject(model)
-        .preferredColorScheme(.dark)
-        .tint(Colors.accent)
+        .tint(TerminalColors.accentText)
+        .terminalTheme()
         let controller = UIHostingController(rootView: root)
         // The flip only works with a full-screen presentation.
         controller.modalPresentationStyle = .fullScreen
         controller.modalTransitionStyle = .flipHorizontal
-        controller.view.backgroundColor = UIColor(argb: Palette.shared.canvas)
+        controller.view.backgroundColor = TerminalUIColors.canvas
         presented = controller
         host.present(controller, animated: true)
     }
