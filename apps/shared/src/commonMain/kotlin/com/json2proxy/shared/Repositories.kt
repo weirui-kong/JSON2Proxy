@@ -4,6 +4,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.uuid.Uuid
 
 private val storeJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -96,11 +101,26 @@ class SettingsRepository(private val store: KeyValueStore) {
     private fun load(): AppSettings {
         val raw = store.getString(KEY_SETTINGS) ?: return AppSettings()
         return try {
-            storeJson.decodeFromString(raw)
+            migrateLegacyDns(storeJson.parseToJsonElement(raw).jsonObject)
         } catch (e: Exception) {
             AppLog.e("SettingsRepository", "Stored settings unreadable, using defaults: ${e.message}")
             AppSettings()
         }
+    }
+
+    /**
+     * Settings saved before DNS options were per mode had top-level "dohUrl" and
+     * "bootstrap"; they become the options of the mode that was active then.
+     */
+    private fun migrateLegacyDns(stored: JsonObject): AppSettings {
+        val settings = storeJson.decodeFromJsonElement<AppSettings>(stored)
+        if ("modeOptions" in stored) return settings
+        val legacy = ModeOptions(
+            dohUrl = stored["dohUrl"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            bootstrap = stored["bootstrap"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+        )
+        if (legacy == ModeOptions()) return settings
+        return settings.copy(modeOptions = mapOf(settings.routingMode.wire to legacy))
     }
 
     private companion object {

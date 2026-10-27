@@ -27,8 +27,8 @@ object EngineConfig {
             }
             put("mode", settings.routingMode.wire)
             if (settings.routingMode == RoutingMode.Custom) put("rules", settings.customRules)
-            put("doh", settings.dohUrl.trim())
-            put("bootstrap", settings.bootstrap.trim())
+            put("doh", settings.activeOptions.dohUrl.trim())
+            put("bootstrap", settings.activeOptions.bootstrap.trim())
             put("mtu", MTU)
             if (memoryLimitMb > 0) put("memory_limit_mb", memoryLimitMb)
         }.toString()

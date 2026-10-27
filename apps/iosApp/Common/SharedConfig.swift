@@ -11,6 +11,13 @@ enum SharedConfig {
     static let noticeNotification = "com.json2proxy.app.notice"
     static let noticeKindKey = "notice.kind"
     static let noticeMessageKey = "notice.message"
+    /// Provider messages the app sends to read the engine's traffic stats.
+    static let statsMessage = "stats"
+    static let statsDetailMessage = "stats-detail"
+    /// Provider message asking the extension to restart the engine with the
+    /// configuration now in the keychain, keeping the tunnel up.
+    static let reloadMessage = "reload"
+    static let reloadSucceeded = "ok"
     /// Go heap limit for the extension; iOS stops packet tunnels near 50 MB.
     static let extensionMemoryLimitMB: Int32 = 40
 

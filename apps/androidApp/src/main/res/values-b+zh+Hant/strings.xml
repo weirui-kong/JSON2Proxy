@@ -116,4 +116,12 @@
     <string name="qr_warning">這個 QR Code 含有伺服器密鑰，請只讓你信任的裝置掃描。</string>
     <string name="import_review">請確認匯入的伺服器設定後再儲存。</string>
 
+    <!-- 流量統計 -->
+    <string name="traffic_upload">上傳</string>
+    <string name="traffic_download">下載</string>
+    <string name="traffic_connections">TCP %1$d · UDP %2$d</string>
+    <string name="section_traffic_unit">流量單位</string>
+    <string name="traffic_unit_bytes">位元組（KB/s、MB/s、GB/s）</string>
+    <string name="traffic_unit_bits">位元（Kb/s、Mb/s、Gb/s）</string>
+
 </resources>

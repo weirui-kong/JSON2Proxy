@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
     @State private var draft = SettingsDraft()
     @State private var rulesError: String?
     @State private var loaded = false
@@ -52,6 +53,14 @@ struct SettingsView: View {
             } footer: {
                 Text("The kill switch blocks traffic while the proxy is down. Strict mode routes all system traffic through the tunnel and can affect AirDrop and local network features. Changes apply on the next connection.")
             }
+
+            Section("Traffic units") {
+                Picker("Traffic units", selection: $draft.trafficUnit) {
+                    ForEach(TrafficUnit.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+            }
         }
         .navigationTitle("Settings")
         .toolbar {
@@ -74,40 +83,67 @@ struct SettingsView: View {
         }
         model.update(draft.settings)
         ToastCenter.shared.show(String(localized: "Settings saved"))
+        dismiss()
     }
 }
 
 /// Editable copy of AppSettings; Kotlin data classes are immutable in Swift.
 struct SettingsDraft {
+    struct DNS {
+        var doh = ""
+        var bootstrap = ""
+    }
+
     var mode: RoutingMode = .global
     var rules = ""
-    var doh = ""
-    var bootstrap = ""
+    /// Each routing mode keeps its own DNS options; switching modes only changes which ones are shown.
+    var dns: [RoutingMode: DNS] = [:]
     var killSwitch = true
     var autoConnect = false
     var strictKillSwitch = false
+    var trafficUnit: TrafficUnit = .bytes
 
     init() {}
 
     init(_ settings: AppSettings) {
         mode = settings.routingMode
         rules = settings.customRules
-        doh = settings.dohUrl
-        bootstrap = settings.bootstrap
+        for mode in RoutingMode.allCases {
+            let options = settings.options(mode: mode)
+            dns[mode] = DNS(doh: options.dohUrl, bootstrap: options.bootstrap)
+        }
         killSwitch = settings.killSwitch
         autoConnect = settings.autoConnect
         strictKillSwitch = settings.strictKillSwitch
+        trafficUnit = settings.trafficUnit
+    }
+
+    /// DoH of the selected mode.
+    var doh: String {
+        get { dns[mode]?.doh ?? "" }
+        set { dns[mode, default: DNS()].doh = newValue }
+    }
+
+    /// Bootstrap DNS of the selected mode.
+    var bootstrap: String {
+        get { dns[mode]?.bootstrap ?? "" }
+        set { dns[mode, default: DNS()].bootstrap = newValue }
     }
 
     var settings: AppSettings {
         AppSettings(
             routingMode: mode,
             customRules: rules,
-            dohUrl: ModelsKt.normalizeAscii(input: doh),
-            bootstrap: ModelsKt.normalizeAscii(input: bootstrap),
+            modeOptions: dns.reduce(into: [String: ModeOptions]()) { result, entry in
+                result[entry.key.wire] = ModeOptions(
+                    dohUrl: ModelsKt.normalizeAscii(input: entry.value.doh),
+                    bootstrap: ModelsKt.normalizeAscii(input: entry.value.bootstrap)
+                )
+            },
             killSwitch: killSwitch,
             autoConnect: autoConnect,
-            strictKillSwitch: strictKillSwitch
+            strictKillSwitch: strictKillSwitch,
+            trafficUnit: trafficUnit
         )
     }
 }
@@ -126,6 +162,15 @@ extension RoutingMode {
         case .global: String(localized: "All traffic goes through the proxy. Domains are sent to the server without resolving them on the device.")
         case .geoIpCn: String(localized: "Addresses in China connect directly; everything else goes through the proxy.")
         case .custom: String(localized: "One rule per line, ending with FINAL. Supported: DOMAIN, DOMAIN-SUFFIX, DOMAIN-KEYWORD, IP-CIDR, IP-CIDR6, GEOIP.")
+        }
+    }
+}
+
+extension TrafficUnit {
+    var title: String {
+        switch self {
+        case .bytes: String(localized: "Bytes (KB/s, MB/s, GB/s)")
+        case .bits: String(localized: "Bits (Kb/s, Mb/s, Gb/s)")
         }
     }
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"runtime/debug"
 	"sync"
 
@@ -22,6 +23,23 @@ const (
 
 // ModeCustom routes with the rules passed in the engine configuration.
 const ModeCustom = "custom"
+
+// Addresses of the TUN interface. Both platforms configure the interface
+// with these, and the engine refuses flows to them other than DNS.
+const (
+	TunnelIPv4Address      = "172.19.0.1"
+	TunnelIPv4PrefixLength = 30
+	TunnelIPv6Address      = "fdfe:dcba:9876::1"
+	TunnelIPv6PrefixLength = 126
+	// TunnelDNSAddress is the DNS server announced to the system. The engine
+	// answers DNS on port 53 at any address.
+	TunnelDNSAddress = "172.19.0.2"
+)
+
+var tunnelPrefixes = []netip.Prefix{
+	netip.PrefixFrom(netip.MustParseAddr(TunnelIPv4Address), TunnelIPv4PrefixLength).Masked(),
+	netip.PrefixFrom(netip.MustParseAddr(TunnelIPv6Address), TunnelIPv6PrefixLength).Masked(),
+}
 
 // engineConfig is the JSON accepted by StartEngine:
 //
@@ -101,6 +119,23 @@ func EngineRunning() bool {
 	return running != nil
 }
 
+// Stats returns a JSON snapshot of the running engine's traffic (see the
+// traffic statistics spec), or "" when no engine runs. detail adds hosts, DNS
+// results and recent flows; the summary is enough for a once-per-second poll.
+func Stats(detail bool) string {
+	engineMu.Lock()
+	e := running
+	engineMu.Unlock()
+	if e == nil {
+		return ""
+	}
+	data, err := json.Marshal(e.Stats(detail))
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
 // NetworkChanged tells the engine the device switched networks.
 func NetworkChanged() {
 	engineMu.Lock()
@@ -142,5 +177,6 @@ func parseEngineConfig(configJSON string) (engine.Config, int64, error) {
 	}
 	return engine.Config{
 		Client: raw.Client, Rules: rules, DoHURL: raw.DoH, Bootstrap: raw.Bootstrap, MTU: raw.MTU,
+		TunnelPrefixes: tunnelPrefixes,
 	}, int64(raw.MemoryLimitMB) << 20, nil
 }

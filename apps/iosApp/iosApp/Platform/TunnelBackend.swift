@@ -11,6 +11,8 @@ final class TunnelBackend: VpnBackend, @unchecked Sendable {
     private var statusObserver: NSObjectProtocol?
     private var noticeRelay: NoticeRelay?
     private var lastStatus: NEVPNStatus = .invalid
+    /// Configuration to start once the tunnel finishes stopping for a full restart.
+    private var pendingRestart: String?
 
     @MainActor
     func attach(_ graph: AppGraph) {
@@ -35,6 +37,31 @@ final class TunnelBackend: VpnBackend, @unchecked Sendable {
         Task { @MainActor in await self.stopTunnel() }
     }
 
+    func restart(engineConfigJson: String) {
+        Task { @MainActor in await self.restartTunnel(engineConfigJson) }
+    }
+
+    /// Asks the packet tunnel extension, where the engine runs, for its stats.
+    func requestStats(detail: Bool, callback: @escaping (String?) -> Void) {
+        let message = detail ? SharedConfig.statsDetailMessage : SharedConfig.statsMessage
+        // A Kotlin lambda may be invoked from any thread.
+        nonisolated(unsafe) let callback = callback
+        Task { @MainActor in
+            guard let session = self.manager?.connection as? NETunnelProviderSession,
+                  session.status == .connected else {
+                callback(nil)
+                return
+            }
+            do {
+                try session.sendProviderMessage(Data(message.utf8)) { response in
+                    callback(response.map { String(decoding: $0, as: UTF8.self) })
+                }
+            } catch {
+                callback(nil)
+            }
+        }
+    }
+
     @MainActor
     private func startTunnel(_ config: String) async {
         guard SharedKeychain.set(config, account: SharedConfig.engineConfigAccount) else {
@@ -44,13 +71,76 @@ final class TunnelBackend: VpnBackend, @unchecked Sendable {
         do {
             let manager = try await loadManager()
             configure(manager)
-            try await manager.saveToPreferences()
+            try await save(manager)
             // Required after saving, or the first start fails.
             try await manager.loadFromPreferences()
             try manager.connection.startVPNTunnel()
+        } catch where error.isVPNPermissionDenied {
+            graph?.controller.onVpnStatus(status: .disconnected, error: nil)
+            ToastCenter.shared.show(Toast(String(localized: "VPN permission denied"), duration: .long))
         } catch {
             fail(error.localizedDescription)
         }
+    }
+
+    /// Installs the VPN configuration if it does not exist yet; iOS asks the
+    /// user the first time. Latency tests and other network features rely on
+    /// it, so they call this first instead of failing silently without it.
+    @MainActor
+    func ensureConfiguration() async throws {
+        let manager = try await loadManager()
+        guard manager.protocolConfiguration == nil else { return }
+        configure(manager)
+        do {
+            try await save(manager)
+            try await manager.loadFromPreferences()
+        } catch {
+            // Start from a fresh manager next time instead of this unsaved one.
+            self.manager = nil
+            throw error
+        }
+    }
+
+    /// Applies a new configuration. A connected tunnel swaps its engine in
+    /// place, so traffic stays in the tunnel. On-demand and strict mode live in
+    /// the VPN configuration itself and need a full stop and start.
+    @MainActor
+    private func restartTunnel(_ config: String) async {
+        guard let manager, let session = manager.connection as? NETunnelProviderSession,
+              session.status == .connected else {
+            await startTunnel(config)
+            return
+        }
+        if needsReconfiguration(manager) {
+            pendingRestart = config
+            await stopTunnel()
+            return
+        }
+        guard SharedKeychain.set(config, account: SharedConfig.engineConfigAccount) else {
+            fail("Could not store the tunnel configuration in the keychain")
+            return
+        }
+        do {
+            try session.sendProviderMessage(Data(SharedConfig.reloadMessage.utf8)) { [weak self] response in
+                let reply = response.map { String(decoding: $0, as: UTF8.self) }
+                Task { @MainActor in
+                    if reply == SharedConfig.reloadSucceeded {
+                        self?.graph?.controller.onVpnStatus(status: .connected, error: nil)
+                    } else {
+                        self?.fail(reply ?? "The tunnel did not answer")
+                    }
+                }
+            }
+        } catch {
+            fail(error.localizedDescription)
+        }
+    }
+
+    @MainActor
+    private func needsReconfiguration(_ manager: NETunnelProviderManager) -> Bool {
+        guard let settings = graph?.settings.current,
+              let proto = manager.protocolConfiguration as? NETunnelProviderProtocol else { return true }
+        return proto.includeAllNetworks != settings.strictKillSwitch || manager.isOnDemandEnabled != settings.autoConnect
     }
 
     @MainActor
@@ -62,6 +152,19 @@ final class TunnelBackend: VpnBackend, @unchecked Sendable {
             try? await manager.saveToPreferences()
         }
         manager.connection.stopVPNTunnel()
+    }
+
+    /// Saving is when iOS asks to add the configuration; a read/write failure
+    /// there means the user declined. (Loading fails with the same code for
+    /// other reasons, such as the missing NetworkExtension service in Simulator.)
+    @MainActor
+    private func save(_ manager: NETunnelProviderManager) async throws {
+        do {
+            try await manager.saveToPreferences()
+        } catch let error as NSError
+            where error.domain == NEVPNErrorDomain && error.code == NEVPNError.Code.configurationReadWriteFailed.rawValue {
+            throw VPNPermissionDenied()
+        }
     }
 
     @MainActor
@@ -109,6 +212,13 @@ final class TunnelBackend: VpnBackend, @unchecked Sendable {
         case .disconnecting:
             controller.onVpnStatus(status: .disconnecting, error: nil)
         case .disconnected, .invalid:
+            if let config = pendingRestart {
+                // A full restart: the old tunnel is down, start the new one.
+                pendingRestart = nil
+                controller.onVpnStatus(status: .connecting, error: nil)
+                Task { await startTunnel(config) }
+                return
+            }
             guard previous == .connecting, let connection = manager?.connection else {
                 controller.onVpnStatus(status: .disconnected, error: nil)
                 return
@@ -166,4 +276,11 @@ final class NoticeRelay {
               let message = defaults.string(forKey: SharedConfig.noticeMessageKey) else { return }
         handler(kind, message)
     }
+}
+
+/// The user tapped "Don't Allow" when iOS asked to add the VPN configuration.
+struct VPNPermissionDenied: Error {}
+
+extension Error {
+    var isVPNPermissionDenied: Bool { self is VPNPermissionDenied }
 }

@@ -19,7 +19,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // Recreating the activity redelivers the same intent; import it only once.
-        if (savedInstanceState == null) incomingLink = intent.linkOrNull()
+        if (savedInstanceState == null) incomingLink = intent.newLinkOrNull()
         val graph = (application as JsonProxyApp).graph
         setContent {
             MaterialTheme {
@@ -30,8 +30,27 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        intent.linkOrNull()?.let { incomingLink = it }
+        intent.newLinkOrNull()?.let { incomingLink = it }
     }
 
-    private fun Intent.linkOrNull(): String? = if (action == Intent.ACTION_VIEW) dataString else null
+    /**
+     * The link forwarded by [LinkActivity], unless its id was handled before:
+     * the system relaunches a task with its original intent, for example from
+     * Recents or after an update.
+     */
+    private fun Intent.newLinkOrNull(): String? {
+        val link = getStringExtra(EXTRA_LINK) ?: return null
+        val id = getStringExtra(EXTRA_LINK_ID) ?: return null
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        if (prefs.getString(KEY_HANDLED_LINK_ID, null) == id) return null
+        prefs.edit().putString(KEY_HANDLED_LINK_ID, id).apply()
+        return link
+    }
+
+    companion object {
+        const val EXTRA_LINK = "com.json2proxy.app.LINK"
+        const val EXTRA_LINK_ID = "com.json2proxy.app.LINK_ID"
+        private const val PREFS = "json2proxy_ui"
+        private const val KEY_HANDLED_LINK_ID = "handled_link_id"
+    }
 }

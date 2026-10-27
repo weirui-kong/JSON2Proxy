@@ -7,10 +7,21 @@ import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.rememberTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,9 +40,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.res.stringResource
 import com.json2proxy.android.R
 import com.json2proxy.shared.AppGraph
@@ -45,6 +58,8 @@ import com.json2proxy.shared.RoutingMode
 import com.json2proxy.shared.ServerLink
 import com.json2proxy.shared.ServerLinks
 import com.json2proxy.shared.ServerProfile
+import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 private sealed interface Screen {
     data object Home : Screen
@@ -62,7 +77,22 @@ fun JsonProxyUi(graph: AppGraph, incomingLink: String?, onLinkHandled: () -> Uni
     var stack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
     val push: (Screen) -> Unit = { stack = stack + it }
     val pop: () -> Unit = { if (stack.size > 1) stack = stack.dropLast(1) }
-    BackHandler(enabled = stack.size > 1) { pop() }
+
+    // Page changes animate between stacks; the back gesture seeks the pop animation.
+    val navigation = remember { SeekableTransitionState(stack) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(stack) { navigation.animateTo(stack) }
+    PredictiveBackHandler(enabled = stack.size > 1) { progress ->
+        val previous = stack.dropLast(1)
+        try {
+            progress.collect { event -> navigation.seekTo(event.progress, previous) }
+            stack = previous
+        } catch (e: CancellationException) {
+            // Gesture cancelled: settle back on the current page.
+            scope.launch { navigation.animateTo(stack) }
+            throw e
+        }
+    }
 
     // Links opened from other apps, including the system camera, always go to a prefilled editor.
     LaunchedEffect(incomingLink) {
@@ -101,7 +131,36 @@ fun JsonProxyUi(graph: AppGraph, incomingLink: String?, onLinkHandled: () -> Uni
         if (consent != null) vpnPermission.launch(consent) else controller.connect()
     }
 
-    when (val screen = stack.last()) {
+    rememberTransition(navigation, label = "navigation").AnimatedContent(
+        transitionSpec = { pageTransition(forward = targetState.size >= initialState.size) },
+        contentKey = { it.last() },
+    ) { shown ->
+        Page(shown.last(), graph, connect, push, pop) { stack = it(stack) }
+    }
+}
+
+/** Shared-axis page motion: pages slide a little and cross-fade, the new page on top. */
+private fun pageTransition(forward: Boolean): ContentTransform {
+    val direction = if (forward) 1 else -1
+    val spec = tween<IntOffset>(PAGE_ANIMATION_MS, easing = FastOutSlowInEasing)
+    val fade = tween<Float>(PAGE_ANIMATION_MS, easing = FastOutSlowInEasing)
+    return (slideInHorizontally(spec) { direction * it / 5 } + fadeIn(fade))
+        .togetherWith(slideOutHorizontally(spec) { -direction * it / 5 } + fadeOut(fade))
+        .apply { targetContentZIndex = if (forward) 1f else -1f }
+}
+
+private const val PAGE_ANIMATION_MS = 300
+
+@Composable
+private fun Page(
+    screen: Screen,
+    graph: AppGraph,
+    connect: () -> Unit,
+    push: (Screen) -> Unit,
+    pop: () -> Unit,
+    replaceStack: ((List<Screen>) -> List<Screen>) -> Unit,
+) {
+    when (screen) {
         Screen.Home -> HomeScreen(
             graph = graph,
             onConnect = connect,
@@ -117,7 +176,7 @@ fun JsonProxyUi(graph: AppGraph, incomingLink: String?, onLinkHandled: () -> Uni
         )
         is Screen.Editor -> ServerEditorScreen(graph = graph, profileId = screen.profileId, imported = screen.imported, onDone = pop)
         // The editor replaces the scanner so going back returns to the list.
-        Screen.Scanner -> QrScannerScreen(onClose = pop, onLink = { stack = stack.dropLast(1) + Screen.Editor(null, it) })
+        Screen.Scanner -> QrScannerScreen(onClose = pop, onLink = { link -> replaceStack { it.dropLast(1) + Screen.Editor(null, link) } })
         is Screen.QrCode -> ServerQrScreen(profile = screen.profile, link = screen.link, onBack = pop)
         Screen.Settings -> SettingsScreen(graph = graph, onBack = pop)
     }

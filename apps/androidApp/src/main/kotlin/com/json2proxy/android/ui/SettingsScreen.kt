@@ -31,7 +31,9 @@ import androidx.compose.ui.unit.dp
 import com.json2proxy.android.R
 import com.json2proxy.shared.AppGraph
 import com.json2proxy.shared.AppSettings
+import com.json2proxy.shared.ModeOptions
 import com.json2proxy.shared.RoutingMode
+import com.json2proxy.shared.TrafficUnit
 import com.json2proxy.shared.normalizeAscii
 
 @Composable
@@ -40,9 +42,12 @@ internal fun SettingsScreen(graph: AppGraph, onBack: () -> Unit) {
     val initial = remember { graph.settings.current }
     var mode by remember { mutableStateOf(initial.routingMode) }
     var rules by remember { mutableStateOf(initial.customRules) }
-    var doh by remember { mutableStateOf(initial.dohUrl) }
-    var bootstrap by remember { mutableStateOf(initial.bootstrap) }
+    // Each routing mode keeps its own DNS options; switching modes only changes which ones are shown.
+    var modeOptions by remember { mutableStateOf(RoutingMode.entries.associateWith { initial.options(it) }) }
+    val options = modeOptions.getValue(mode)
+    val editOptions: (ModeOptions) -> Unit = { modeOptions = modeOptions + (mode to it) }
     var killSwitch by remember { mutableStateOf(initial.killSwitch) }
+    var trafficUnit by remember { mutableStateOf(initial.trafficUnit) }
     var rulesError by remember { mutableStateOf<String?>(null) }
 
     val save: () -> Unit = {
@@ -52,12 +57,15 @@ internal fun SettingsScreen(graph: AppGraph, onBack: () -> Unit) {
                 initial.copy(
                     routingMode = mode,
                     customRules = rules,
-                    dohUrl = normalizeAscii(doh),
-                    bootstrap = normalizeAscii(bootstrap),
+                    modeOptions = modeOptions.entries.associate { (key, value) ->
+                        key.wire to ModeOptions(normalizeAscii(value.dohUrl), normalizeAscii(value.bootstrap))
+                    },
                     killSwitch = killSwitch,
+                    trafficUnit = trafficUnit,
                 ),
             )
             Toast.makeText(context, context.getString(R.string.settings_saved), Toast.LENGTH_SHORT).show()
+            onBack()
         }
     }
 
@@ -86,13 +94,13 @@ internal fun SettingsScreen(graph: AppGraph, onBack: () -> Unit) {
 
             SectionTitle(stringResource(R.string.section_dns))
             OutlinedTextField(
-                value = doh, onValueChange = { doh = it }, label = { Text(stringResource(R.string.field_doh)) },
+                value = options.dohUrl, onValueChange = { editOptions(options.copy(dohUrl = it)) }, label = { Text(stringResource(R.string.field_doh)) },
                 placeholder = { Text(mode.defaultDoH) },
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = TechnicalKeyboard.copy(keyboardType = KeyboardType.Uri),
             )
             OutlinedTextField(
-                value = bootstrap, onValueChange = { bootstrap = it }, label = { Text(stringResource(R.string.field_bootstrap)) },
+                value = options.bootstrap, onValueChange = { editOptions(options.copy(bootstrap = it)) }, label = { Text(stringResource(R.string.field_bootstrap)) },
                 placeholder = { Text(AppSettings.DEFAULT_BOOTSTRAP) },
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = TechnicalKeyboard,
@@ -109,6 +117,9 @@ internal fun SettingsScreen(graph: AppGraph, onBack: () -> Unit) {
                 Text(stringResource(R.string.action_system_vpn_settings))
             }
             Footnote(stringResource(R.string.always_on_footnote))
+
+            SectionTitle(stringResource(R.string.section_traffic_unit))
+            Choices(TrafficUnit.entries, trafficUnit, label = { it.title() }) { trafficUnit = it }
         }
     }
 }
@@ -117,3 +128,11 @@ internal fun SettingsScreen(graph: AppGraph, onBack: () -> Unit) {
 private fun Footnote(text: String) {
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
+
+@Composable
+private fun TrafficUnit.title(): String = stringResource(
+    when (this) {
+        TrafficUnit.Bytes -> R.string.traffic_unit_bytes
+        TrafficUnit.Bits -> R.string.traffic_unit_bits
+    },
+)

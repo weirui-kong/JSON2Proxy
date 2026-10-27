@@ -118,4 +118,12 @@
     <string name="qr_warning">This QR code contains the server secret. Only let devices you trust scan it.</string>
     <string name="import_review">Review the imported server, then save.</string>
 
+    <!-- Traffic statistics -->
+    <string name="traffic_upload">Upload</string>
+    <string name="traffic_download">Download</string>
+    <string name="traffic_connections">TCP %1$d · UDP %2$d</string>
+    <string name="section_traffic_unit">Traffic units</string>
+    <string name="traffic_unit_bytes">Bytes (KB/s, MB/s, GB/s)</string>
+    <string name="traffic_unit_bits">Bits (Kb/s, Mb/s, Gb/s)</string>
+
 </resources>

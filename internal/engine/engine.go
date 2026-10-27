@@ -18,6 +18,7 @@ import (
 	"json2proxy/internal/dns"
 	"json2proxy/internal/fakeip"
 	"json2proxy/internal/router"
+	"json2proxy/internal/stats"
 	"json2proxy/internal/tun"
 )
 
@@ -48,6 +49,9 @@ type Config struct {
 	DoHURL    string
 	Bootstrap string
 	MTU       int
+	// TunnelPrefixes are the TUN interface's own networks. Only DNS on port
+	// 53 is served there; other flows to them are refused.
+	TunnelPrefixes []netip.Prefix
 	// Dial opens sockets that bypass the VPN tunnel. Nil uses net.Dialer.
 	Dial dns.DialFunc
 	// Log and Notice may be nil.
@@ -64,6 +68,8 @@ type Engine struct {
 	router *router.Router
 	pool   *fakeip.Pool
 	stack  *tun.Stack
+	stats  *stats.Collector
+	conns  connSet
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -79,7 +85,7 @@ func Start(dev tun.Device, cfg Config) (*Engine, error) {
 	if cfg.MTU == 0 {
 		cfg.MTU = defaultMTU
 	}
-	e := &Engine{cfg: cfg, dial: cfg.Dial}
+	e := &Engine{cfg: cfg, dial: cfg.Dial, stats: stats.New()}
 	if e.dial == nil {
 		e.dial = (&net.Dialer{}).DialContext
 	}
@@ -119,20 +125,29 @@ func Start(dev tun.Device, cfg Config) (*Engine, error) {
 	return e, nil
 }
 
-// Close stops the stack, closes the device and drops all mappings.
+// Close ends every flow, stops the stack, closes the device and drops all
+// mappings.
 func (e *Engine) Close() error {
 	e.cancel()
+	e.conns.closeAll(true)
 	err := e.stack.Close()
 	e.pool.Reset()
 	e.logf(LogInfo, "stopped")
 	return err
 }
 
-// NetworkChanged drops cached DNS answers after the device switches networks.
+// Stats returns the traffic counters; detail adds hosts, DNS results and
+// recent flows.
+func (e *Engine) Stats(detail bool) stats.Snapshot { return e.stats.Snapshot(detail) }
+
+// NetworkChanged drops cached DNS answers and closes every open flow after
+// the device switches networks, so no connection keeps using a path set up
+// over the previous network; apps reconnect through the current one.
 func (e *Engine) NetworkChanged() {
 	e.boot.ClearCache()
 	e.doh.ClearCache()
-	e.logf(LogInfo, "network changed, DNS caches cleared")
+	closed := e.conns.closeAll(false)
+	e.logf(LogInfo, "network changed, DNS caches cleared, %d connections closed", closed)
 }
 
 func (e *Engine) probe() {
@@ -193,6 +208,17 @@ func (e *Engine) dohHealthChanged(available bool, err error) {
 	e.notice(NoticeDoHUnavailable, err.Error())
 }
 
+// tunnelAddress reports whether dst belongs to the TUN interface itself.
+func (e *Engine) tunnelAddress(dst netip.Addr) bool {
+	dst = dst.Unmap()
+	for _, p := range e.cfg.TunnelPrefixes {
+		if p.Contains(dst) {
+			return true
+		}
+	}
+	return false
+}
+
 // target maps a destination back to the domain it was looked up for.
 func (e *Engine) target(dst netip.Addr) (router.Target, bool) {
 	if e.pool.Contains(dst) {
@@ -200,6 +226,16 @@ func (e *Engine) target(dst netip.Addr) (router.Target, bool) {
 		return router.Target{Host: name}, ok
 	}
 	return router.Target{Addr: dst}, true
+}
+
+// route decides how to handle a flow and records the decision, plus any DoH
+// lookup made while matching, in the statistics.
+func (e *Engine) route(ctx context.Context, network string, t router.Target, port uint16) (router.Decision, *stats.Flow) {
+	d := e.router.Route(ctx, t)
+	if t.Host != "" && (len(d.Addrs) > 0 || d.ResolveErr != nil) {
+		e.stats.RecordDNS(t.Host, d.Addrs, d.ResolveErr)
+	}
+	return d, e.stats.Route(network, proxyHost(t), port, d.Action.String(), d.Rule.String())
 }
 
 // directAddrs returns real addresses for a DIRECT flow, resolving domains
@@ -211,7 +247,9 @@ func (e *Engine) directAddrs(ctx context.Context, t router.Target, d router.Deci
 	if len(d.Addrs) > 0 {
 		return d.Addrs, nil
 	}
-	return e.doh.LookupIP(ctx, t.Host)
+	addrs, err := e.doh.LookupIP(ctx, t.Host)
+	e.stats.RecordDNS(t.Host, addrs, err)
+	return addrs, err
 }
 
 func (e *Engine) dialDirect(ctx context.Context, network string, addrs []netip.Addr, port uint16) (net.Conn, error) {

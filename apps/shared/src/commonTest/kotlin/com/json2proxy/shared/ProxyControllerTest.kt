@@ -38,6 +38,10 @@ class FakeBackend : VpnBackend {
     var stops = 0
     override fun start(engineConfigJson: String) { started += engineConfigJson }
     override fun stop() { stops++ }
+    val restarts = mutableListOf<String>()
+    override fun restart(engineConfigJson: String) { restarts += engineConfigJson }
+    var stats: String? = null
+    override fun requestStats(detail: Boolean, callback: (String?) -> Unit) = callback(stats)
 }
 
 class FakeCore(private val result: PingResult) : CoreBridge {
@@ -100,6 +104,53 @@ class ProxyControllerTest {
         assertEquals(Notice.ConnectionFailed(FailureReason.NoServerSelected, ""), notice.await())
         assertTrue(backend.started.isEmpty())
     }
+
+    // runCurrent, unlike advanceUntilIdle, also runs the controller's background collectors.
+    @Test
+    fun configChangesRestartTheConnectedVpn() = runTest {
+        profiles.save(profile(), SECRET)
+        val c = controller(this)
+        c.connect()
+        c.onVpnStatus(VpnStatus.Connected)
+        testScheduler.runCurrent()
+        assertTrue(backend.restarts.isEmpty(), "connecting alone must not restart")
+
+        settings.update(settings.current.copy(trafficUnit = TrafficUnit.Bits))
+        testScheduler.runCurrent()
+        assertTrue(backend.restarts.isEmpty(), "display-only settings must not restart")
+
+        settings.update(settings.current.copy(routingMode = RoutingMode.GeoIpCn))
+        testScheduler.runCurrent()
+        assertEquals("geoip-cn", modeOf(backend.restarts.single()))
+        assertEquals(ConnectionState.Connecting("Home"), c.state.value)
+
+        c.onVpnStatus(VpnStatus.Connected)
+        profiles.save(profile().copy(server = "example.org:443"), null)
+        testScheduler.runCurrent()
+        assertEquals(2, backend.restarts.size)
+        assertEquals("example.org:443", serverOf(backend.restarts.last()))
+
+        profiles.delete("p1")
+        testScheduler.runCurrent()
+        assertEquals(1, backend.stops, "removing the connected server disconnects")
+    }
+
+    @Test
+    fun changesWhileDisconnectedDoNotRestart() = runTest {
+        profiles.save(profile(), SECRET)
+        val c = controller(this)
+        c.connect()
+        c.onVpnStatus(VpnStatus.Connected)
+        c.onVpnStatus(VpnStatus.Disconnected)
+        settings.update(settings.current.copy(routingMode = RoutingMode.GeoIpCn))
+        testScheduler.runCurrent()
+        assertTrue(backend.restarts.isEmpty())
+    }
+
+    private fun modeOf(config: String) = Json.parseToJsonElement(config).jsonObject["mode"]!!.jsonPrimitive.content
+
+    private fun serverOf(config: String) =
+        Json.parseToJsonElement(config).jsonObject["client"]!!.jsonObject["server"]!!.jsonPrimitive.content
 
     @Test
     fun killSwitchOffStopsVpnWhenProxyFails() {

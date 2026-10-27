@@ -2,6 +2,8 @@ package mobile
 
 import (
 	"net"
+	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -164,5 +166,24 @@ func TestDefaultsAndValidation(t *testing.T) {
 	}
 	if err := ValidateRules("DOMAIN,a.test,PROXY"); err == nil {
 		t.Fatal("rules without FINAL accepted")
+	}
+}
+
+func TestStatsWithoutEngine(t *testing.T) {
+	if got := Stats(true); got != "" {
+		t.Fatalf("Stats without an engine = %q, want empty", got)
+	}
+}
+
+func TestEngineConfigRefusesTunnelNetworks(t *testing.T) {
+	cfg, _, err := parseEngineConfig(`{"client":{}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, addr := range []string{TunnelDNSAddress, TunnelIPv4Address, TunnelIPv6Address} {
+		a := netip.MustParseAddr(addr)
+		if !slices.ContainsFunc(cfg.TunnelPrefixes, func(p netip.Prefix) bool { return p.Contains(a) }) {
+			t.Errorf("%s is not in the tunnel prefixes %v", addr, cfg.TunnelPrefixes)
+		}
 	}
 }

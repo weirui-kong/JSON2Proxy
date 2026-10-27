@@ -30,8 +30,39 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         completionHandler()
     }
 
+    /// Answers the app's stats requests with the engine's JSON snapshot, and
+    /// restarts the engine in place when the configuration changed.
+    override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
+        let reply: String
+        switch String(decoding: messageData, as: UTF8.self) {
+        case SharedConfig.statsMessage: reply = MobileStats(false)
+        case SharedConfig.statsDetailMessage: reply = MobileStats(true)
+        case SharedConfig.reloadMessage: reply = reloadEngine()
+        default: reply = ""
+        }
+        completionHandler?(reply.isEmpty ? nil : Data(reply.utf8))
+    }
+
+    /// Replaces the engine with one built from the stored configuration. The
+    /// tunnel and its routes stay up, so traffic waits in the interface instead
+    /// of leaving it; stopping the old engine closes every flow it carried.
+    private func reloadEngine() -> String {
+        guard let config = SharedKeychain.get(SharedConfig.engineConfigAccount) else {
+            return TunnelError.missingConfiguration.localizedDescription
+        }
+        MobileStopEngine()
+        if let error = startEngine(config) {
+            // Without an engine the tunnel would only drop traffic.
+            cancelTunnelWithError(error)
+            return error.localizedDescription
+        }
+        return SharedConfig.reloadSucceeded
+    }
+
     /// Starts the Go engine on the utun descriptor; returns the failure, if any.
     private func startEngine(_ config: String) -> Error? {
+        pathMonitor?.cancel()
+        pathMonitor = nil
         MobileSetPlatform(platform)
         var fd = 0
         var error: NSError?
@@ -41,30 +72,61 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         guard MobileStartEngine(fd, config, &error) else {
             return error ?? TunnelError.engineFailed
         }
-        // Wi-Fi and cellular changes invalidate cached DNS answers.
-        let monitor = NWPathMonitor()
-        monitor.pathUpdateHandler = { _ in MobileNetworkChanged() }
+        // A switch between Wi-Fi and cellular clears DNS caches and closes every
+        // flow so apps reconnect over the new network. The first update only
+        // reports the network the tunnel started on.
+        let monitor = NWPathMonitor(prohibitedInterfaceTypes: [.other])
+        let lastNetwork = NetworkSignature()
+        monitor.pathUpdateHandler = { path in
+            if lastNetwork.update(path) { MobileNetworkChanged() }
+        }
         monitor.start(queue: DispatchQueue(label: "com.json2proxy.path"))
         pathMonitor = monitor
         return nil
     }
 
-    /// Addresses must match the Android VpnService builder; the engine
-    /// answers DNS sent to any address.
+    /// The Go core defines the interface addresses, shared with Android, and
+    /// refuses flows to them; it answers DNS sent to any address.
     private static func networkSettings() -> NEPacketTunnelNetworkSettings {
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
-        let ipv4 = NEIPv4Settings(addresses: ["172.19.0.1"], subnetMasks: ["255.255.255.252"])
+        let ipv4 = NEIPv4Settings(
+            addresses: [MobileTunnelIPv4Address],
+            subnetMasks: [ipv4Mask(prefixLength: Int(MobileTunnelIPv4PrefixLength))]
+        )
         ipv4.includedRoutes = [NEIPv4Route.default()]
         settings.ipv4Settings = ipv4
-        let ipv6 = NEIPv6Settings(addresses: ["fdfe:dcba:9876::1"], networkPrefixLengths: [126])
+        let ipv6 = NEIPv6Settings(
+            addresses: [MobileTunnelIPv6Address],
+            networkPrefixLengths: [NSNumber(value: Int(MobileTunnelIPv6PrefixLength))]
+        )
         ipv6.includedRoutes = [NEIPv6Route.default()]
         settings.ipv6Settings = ipv6
-        let dns = NEDNSSettings(servers: ["172.19.0.2"])
+        let dns = NEDNSSettings(servers: [MobileTunnelDNSAddress])
         dns.matchDomains = [""]
         settings.dnsSettings = dns
         settings.mtu = 1500
         return settings
     }
+}
+
+/// Remembers the physical network the tunnel runs over. Only used from the
+/// path monitor's serial queue.
+private final class NetworkSignature: @unchecked Sendable {
+    private var current: String?
+
+    /// Records the path and returns true when it is a different network.
+    func update(_ path: NWPath) -> Bool {
+        let interfaces = path.availableInterfaces.map(\.name).joined(separator: ",")
+        let signature = "\(path.status):\(interfaces)"
+        defer { current = signature }
+        return current != nil && current != signature
+    }
+}
+
+/// Dotted subnet mask for an IPv4 prefix length, such as 255.255.255.252 for 30.
+private func ipv4Mask(prefixLength: Int) -> String {
+    let mask = prefixLength == 0 ? UInt32(0) : UInt32.max << (32 - prefixLength)
+    return (0..<4).map { String((mask >> (24 - 8 * $0)) & 0xFF) }.joined(separator: ".")
 }
 
 enum TunnelError: LocalizedError {

@@ -43,24 +43,41 @@ enum class RoutingMode(val wire: String, val defaultDoH: String) {
     Custom("custom", "https://dns.google/dns-query"),
 }
 
+/** DNS options kept separately for each routing mode. Empty values mean the defaults. */
+@Serializable
+data class ModeOptions(
+    /** Empty means [RoutingMode.defaultDoH]. */
+    val dohUrl: String = "",
+    /** Empty means [AppSettings.DEFAULT_BOOTSTRAP]. */
+    val bootstrap: String = "",
+)
+
 @Serializable
 data class AppSettings(
     val routingMode: RoutingMode = RoutingMode.Global,
     /** Rule text used when [routingMode] is [RoutingMode.Custom]. */
     val customRules: String = "",
-    /** Empty means the default for the routing mode. */
-    val dohUrl: String = "",
-    /** Empty means 8.8.8.8:53. */
-    val bootstrap: String = "",
+    /**
+     * DNS options per routing mode, keyed by [RoutingMode.wire], so switching
+     * modes keeps what was entered for each one.
+     */
+    val modeOptions: Map<String, ModeOptions> = emptyMap(),
     /** Keep the VPN up and block traffic when the proxy fails. */
     val killSwitch: Boolean = true,
     /** iOS Connect On Demand. Android uses the system always-on setting. */
     val autoConnect: Boolean = false,
     /** iOS includeAllNetworks; off by default because it affects system features. */
     val strictKillSwitch: Boolean = false,
+    /** Units for data rates shown in the app. */
+    val trafficUnit: TrafficUnit = TrafficUnit.Bytes,
 ) {
-    val effectiveDoH: String get() = dohUrl.trim().ifEmpty { routingMode.defaultDoH }
-    val effectiveBootstrap: String get() = bootstrap.trim().ifEmpty { DEFAULT_BOOTSTRAP }
+    fun options(mode: RoutingMode): ModeOptions = modeOptions[mode.wire] ?: ModeOptions()
+
+    /** Options of the active routing mode. */
+    val activeOptions: ModeOptions get() = options(routingMode)
+
+    val effectiveDoH: String get() = activeOptions.dohUrl.trim().ifEmpty { routingMode.defaultDoH }
+    val effectiveBootstrap: String get() = activeOptions.bootstrap.trim().ifEmpty { DEFAULT_BOOTSTRAP }
 
     companion object {
         const val DEFAULT_BOOTSTRAP = "8.8.8.8:53"

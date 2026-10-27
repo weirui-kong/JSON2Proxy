@@ -5,6 +5,7 @@ package mobile
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"syscall"
@@ -87,16 +88,26 @@ func ValidateRules(text string) error {
 	return err
 }
 
-// protectedDialer returns a dialer whose sockets bypass the VPN tunnel.
+// protectedDialer returns a dialer whose sockets bypass the VPN tunnel:
+// bound to the physical interface set by SetPhysicalInterface (iOS app), and
+// passed to Platform.Protect (Android VpnService.protect).
 func protectedDialer() *net.Dialer {
-	return &net.Dialer{Control: func(_, _ string, c syscall.RawConn) error {
+	return &net.Dialer{Control: func(network, _ string, c syscall.RawConn) error {
+		var bindErr error
+		protected := true
 		p := current()
-		if p == nil {
-			return nil
-		}
-		protected := false
-		if err := c.Control(func(fd uintptr) { protected = p.Protect(int(fd)) }); err != nil {
+		if err := c.Control(func(fd uintptr) {
+			if bindErr = bindPhysical(network, fd); bindErr != nil {
+				return
+			}
+			if p != nil {
+				protected = p.Protect(int(fd))
+			}
+		}); err != nil {
 			return err
+		}
+		if bindErr != nil {
+			return fmt.Errorf("bind to the physical interface: %w", bindErr)
 		}
 		if !protected {
 			return errors.New("platform refused to protect socket")

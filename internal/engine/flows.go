@@ -12,6 +12,7 @@ import (
 	"json2proxy/internal/client"
 	"json2proxy/internal/protocol"
 	"json2proxy/internal/router"
+	"json2proxy/internal/stats"
 	"json2proxy/internal/tun"
 )
 
@@ -22,6 +23,14 @@ const (
 )
 
 func (e *Engine) HandleTCP(req *tun.TCPRequest) {
+	if e.tunnelAddress(req.Dst.Addr()) {
+		// Nothing listens on the interface itself. Refusing at once lets
+		// callers such as Android's Private DNS (DoT on port 853) fall back
+		// to plain DNS instead of waiting for a dial timeout.
+		e.logf(LogDebug, "tcp %s: tunnel address, refused", req.Dst)
+		req.Reject()
+		return
+	}
 	t, ok := e.target(req.Dst.Addr())
 	if !ok {
 		// A fake IP whose mapping was evicted; the app must look it up again.
@@ -31,7 +40,7 @@ func (e *Engine) HandleTCP(req *tun.TCPRequest) {
 	}
 	ctx := e.ctx
 	port := req.Dst.Port()
-	d := e.router.Route(ctx, t)
+	d, flow := e.route(ctx, stats.NetworkTCP, t, port)
 	if d.ResolveErr != nil {
 		e.logf(LogWarn, "tcp %s: lookup for routing failed: %v", describe(t, port), d.ResolveErr)
 	}
@@ -39,6 +48,7 @@ func (e *Engine) HandleTCP(req *tun.TCPRequest) {
 
 	switch d.Action {
 	case router.Reject:
+		flow.Fail(nil)
 		req.Reject()
 	case router.Direct:
 		addrs, err := e.directAddrs(ctx, t, d)
@@ -48,32 +58,42 @@ func (e *Engine) HandleTCP(req *tun.TCPRequest) {
 		}
 		if err != nil {
 			e.logf(LogWarn, "tcp %s DIRECT failed: %v", describe(t, port), err)
+			flow.Fail(err)
 			req.Reject()
 			return
 		}
 		defer up.Close()
 		local, err := req.Accept()
 		if err != nil {
+			flow.Fail(err)
 			return
 		}
 		defer local.Close()
-		pipe(local, up)
+		defer e.conns.add(closeConn(local), closeConn(up))()
+		flow.Start()
+		defer flow.Close()
+		pipe(flow.Wrap(local), up)
 	case router.Proxy:
 		stream, err := e.client.DialTCP(ctx, proxyHost(t), port)
 		e.proxyResult(err)
 		if err != nil {
 			// Never fall back to a direct connection.
 			e.logf(LogWarn, "tcp %s PROXY failed: %v", describe(t, port), err)
+			flow.Fail(err)
 			req.Reject()
 			return
 		}
 		defer stream.Close()
 		local, err := req.Accept()
 		if err != nil {
+			flow.Fail(err)
 			return
 		}
 		defer local.Close()
-		if _, _, err = stream.Relay(local, nil); err != nil {
+		defer e.conns.add(closeConn(local), func() { stream.Close() })()
+		flow.Start()
+		defer flow.Close()
+		if _, _, err = stream.Relay(flow.Wrap(local), nil); err != nil {
 			e.logf(LogDebug, "tcp %s relay ended: %v", describe(t, port), err)
 		}
 	}
@@ -85,6 +105,10 @@ func (e *Engine) HandleUDP(src, dst netip.AddrPort, conn net.Conn) {
 		e.serveDNS(conn)
 		return
 	}
+	if e.tunnelAddress(dst.Addr()) {
+		e.logf(LogDebug, "udp %s: tunnel address, dropped", dst)
+		return
+	}
 	t, ok := e.target(dst.Addr())
 	if !ok {
 		e.logf(LogWarn, "udp %s: unknown fake IP", dst)
@@ -92,10 +116,11 @@ func (e *Engine) HandleUDP(src, dst netip.AddrPort, conn net.Conn) {
 	}
 	ctx := e.ctx
 	port := dst.Port()
-	d := e.router.Route(ctx, t)
+	d, flow := e.route(ctx, stats.NetworkUDP, t, port)
 	e.logf(LogDebug, "udp %s %s via %s", describe(t, port), d.Action, d.Rule)
 	switch d.Action {
 	case router.Reject:
+		flow.Fail(nil)
 	case router.Direct:
 		addrs, err := e.directAddrs(ctx, t, d)
 		var up net.Conn
@@ -104,19 +129,27 @@ func (e *Engine) HandleUDP(src, dst netip.AddrPort, conn net.Conn) {
 		}
 		if err != nil {
 			e.logf(LogWarn, "udp %s DIRECT failed: %v", describe(t, port), err)
+			flow.Fail(err)
 			return
 		}
 		defer up.Close()
-		e.relayUDPDirect(conn, up)
+		defer e.conns.add(closeConn(conn), closeConn(up))()
+		flow.Start()
+		defer flow.Close()
+		e.relayUDPDirect(flow.Wrap(conn), up)
 	case router.Proxy:
 		assoc, err := e.client.OpenUDP(ctx)
 		e.proxyResult(err)
 		if err != nil {
 			e.logf(LogWarn, "udp %s PROXY failed: %v", describe(t, port), err)
+			flow.Fail(err)
 			return
 		}
 		defer assoc.Close()
-		e.relayUDPProxy(conn, assoc, proxyHost(t), port)
+		defer e.conns.add(closeConn(conn), func() { assoc.Close() })()
+		flow.Start()
+		defer flow.Close()
+		e.relayUDPProxy(flow.Wrap(conn), assoc, proxyHost(t), port)
 	}
 }
 
@@ -238,6 +271,8 @@ func watchIdle(done <-chan struct{}, last *atomic.Int64, idle time.Duration, onI
 		}
 	}
 }
+
+func closeConn(c net.Conn) func() { return func() { _ = c.Close() } }
 
 // pipe copies both directions. A clean EOF half-closes the other side; an
 // error tears down both so the opposite copy cannot hang.

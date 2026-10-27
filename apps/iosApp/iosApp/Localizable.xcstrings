@@ -74,12 +74,42 @@
         }
       }
     },
+    "Allow adding the VPN configuration to test latency." : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要允許新增 VPN 設定才能測試延遲。"
+          }
+        }
+      }
+    },
+    "Bits (Kb/s, Mb/s, Gb/s)" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "位元（Kb/s、Mb/s、Gb/s）"
+          }
+        }
+      }
+    },
     "Bootstrap DNS failed: %@" : {
       "localizations" : {
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bootstrap DNS 解析失敗：%@"
+          }
+        }
+      }
+    },
+    "Bytes (KB/s, MB/s, GB/s)" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "位元組（KB/s、MB/s、GB/s）"
           }
         }
       }
@@ -194,6 +224,16 @@
         }
       }
     },
+    "Could not create the VPN configuration: %@" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法建立 VPN 設定：%@"
+          }
+        }
+      }
+    },
     "Could not store the secret securely. The server was not saved." : {
       "localizations" : {
         "zh-Hant" : {
@@ -273,6 +313,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完成"
+          }
+        }
+      }
+    },
+    "Download" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下載"
           }
         }
       }
@@ -393,6 +443,16 @@
     "JSON2Proxy" : {
 
     },
+    "JSON2Proxy cannot reach the network. In Settings, allow it to use WLAN and cellular data." : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JSON2Proxy 無法連上網路。請在「設定」中允許它使用無線區域網路與行動數據。"
+          }
+        }
+      }
+    },
     "Kill switch" : {
       "localizations" : {
         "zh-Hant" : {
@@ -429,6 +489,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "請輸入名稱"
+          }
+        }
+      }
+    },
+    "Network access is turned off" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網路存取已關閉"
           }
         }
       }
@@ -756,6 +826,16 @@
         }
       }
     },
+    "TCP %d · UDP %d" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "TCP %1$d · UDP %2$d"
+          }
+        }
+      }
+    },
     "Test all" : {
       "localizations" : {
         "zh-Hant" : {
@@ -856,6 +936,16 @@
         }
       }
     },
+    "Traffic units" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "流量單位"
+          }
+        }
+      }
+    },
     "Transport" : {
       "localizations" : {
         "zh-Hant" : {
@@ -895,6 +985,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法連線"
+          }
+        }
+      }
+    },
+    "Upload" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上傳"
+          }
+        }
+      }
+    },
+    "VPN permission denied" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未取得 VPN 權限"
           }
         }
       }

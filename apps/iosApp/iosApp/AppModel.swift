@@ -1,3 +1,4 @@
+import OSLog
 import Shared
 import UIKit
 
@@ -10,12 +11,17 @@ final class AppModel: ObservableObject {
     @Published private(set) var selectedId: String?
     @Published private(set) var pings: [String: PingState] = [:]
     @Published private(set) var settings: AppSettings
+    /// Connection counts and speeds while connected.
+    @Published private(set) var traffic: TrafficStats?
     /// A server read from a scanned QR code or an opened link, waiting for the user to review it.
     @Published var pendingImport: ImportedServer?
 
     let platform: String
+    let networkAccess = NetworkAccess()
     private let graph: AppGraph
+    private let backend: TunnelBackend
     private let toasts: ToastCenter
+    private let physicalInterface = PhysicalInterfaceMonitor()
 
     init(toasts: ToastCenter = .shared) {
         let backend = TunnelBackend()
@@ -27,6 +33,7 @@ final class AppModel: ObservableObject {
             memoryLimitMb: SharedConfig.extensionMemoryLimitMB
         )
         self.graph = graph
+        self.backend = backend
         self.toasts = toasts
         self.state = graph.controller.state.value
         self.settings = graph.settings.settings.value
@@ -46,6 +53,7 @@ final class AppModel: ObservableObject {
             group.addTask { await self.observePings() }
             group.addTask { await self.observeSettings() }
             group.addTask { await self.observeNotices() }
+            group.addTask { await self.observeTraffic() }
         }
     }
 
@@ -69,6 +77,10 @@ final class AppModel: ObservableObject {
         for await value in graph.settings.settings { settings = value }
     }
 
+    private func observeTraffic() async {
+        for await value in graph.controller.traffic { traffic = value }
+    }
+
     private func observeNotices() async {
         for await notice in graph.controller.notices {
             toasts.show(Toast(notice: notice))
@@ -81,8 +93,36 @@ final class AppModel: ObservableObject {
     func disconnect() { graph.controller.disconnect() }
     func select(_ id: String) { graph.profiles.select(id: id) }
     func delete(_ id: String) { graph.profiles.delete(id: id) }
-    func ping(_ id: String) { graph.controller.ping(profileId: id) }
-    func pingAll() { graph.controller.pingAll() }
+    func ping(_ id: String) {
+        Task { if await prepareVPN() { graph.controller.ping(profileId: id) } }
+    }
+
+    func pingAll() {
+        Task { if await prepareVPN() { graph.controller.pingAll() } }
+    }
+
+    /// Latency tests need the VPN configuration; create it first (iOS asks the
+    /// user once) and explain a refusal instead of failing silently.
+    private static let logger = Logger(subsystem: "com.json2proxy.app", category: "vpn")
+
+    private func prepareVPN() async -> Bool {
+        #if targetEnvironment(simulator)
+        // Simulator has no NetworkExtension service, so the configuration can never exist there.
+        return true
+        #else
+        do {
+            try await backend.ensureConfiguration()
+            return true
+        } catch where error.isVPNPermissionDenied {
+            Self.logger.notice("VPN configuration refused by the user")
+            toasts.show(Toast(String(localized: "Allow adding the VPN configuration to test latency."), duration: .long))
+        } catch {
+            Self.logger.error("Cannot create the VPN configuration: \(error.localizedDescription, privacy: .public)")
+            toasts.show(Toast(String(localized: "Could not create the VPN configuration: \(error.localizedDescription)"), duration: .long))
+        }
+        return false
+        #endif
+    }
     func newProfileId() -> String { graph.profiles.generateId() }
     func hasSecret(_ id: String) -> Bool { graph.profiles.secret(id: id) != nil }
 

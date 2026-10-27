@@ -42,4 +42,17 @@ enum class VpnStatus { Disconnected, Connecting, Connected, Disconnecting }
 interface VpnBackend {
     fun start(engineConfigJson: String)
     fun stop()
+
+    /**
+     * Applies a new configuration to the running VPN. Implementations keep
+     * traffic inside the tunnel while switching where the platform allows it.
+     */
+    fun restart(engineConfigJson: String)
+
+    /**
+     * Asks the running engine for its stats JSON (Go `Stats`), with hosts,
+     * DNS results and flows when [detail] is set. [callback] gets null when
+     * the engine is not running or cannot be reached; it may run on any thread.
+     */
+    fun requestStats(detail: Boolean, callback: (String?) -> Unit)
 }

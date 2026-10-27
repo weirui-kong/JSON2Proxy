@@ -8,6 +8,8 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.os.Handler
@@ -47,7 +49,6 @@ class ProxyVpnService : VpnService() {
             shutdown()
             return START_NOT_STICKY
         }
-        if (running) stopEngine()
         report(VpnStatus.Connecting)
         try {
             startEngine(config)
@@ -69,21 +70,29 @@ class ProxyVpnService : VpnService() {
         super.onDestroy()
     }
 
+    /**
+     * Starts the engine on a new interface. When an engine already runs (the
+     * configuration changed), the new interface is established first and the
+     * old engine stopped after, so traffic never leaves the tunnel while
+     * switching; stopping the old engine closes every flow it carried.
+     */
     private fun startEngine(config: String) {
-        Mobile.setPlatform(EnginePlatform())
         val tun = Builder()
             .setSession(getString(R.string.app_name))
             .setMtu(MTU)
-            .addAddress("172.19.0.1", 30)
+            // The Go core defines the interface addresses and refuses flows to them.
+            .addAddress(Mobile.TunnelIPv4Address, Mobile.TunnelIPv4PrefixLength.toInt())
             .addRoute("0.0.0.0", 0)
-            .addAddress("fdfe:dcba:9876::1", 126)
+            .addAddress(Mobile.TunnelIPv6Address, Mobile.TunnelIPv6PrefixLength.toInt())
             .addRoute("::", 0)
             // Any address works: the engine answers all DNS on port 53.
-            .addDnsServer("172.19.0.2")
+            .addDnsServer(Mobile.TunnelDNSAddress)
             // The app's own sockets (TCP ping, engine) stay outside the tunnel.
             .addDisallowedApplication(packageName)
             .setConfigureIntent(openAppIntent())
             .establish() ?: throw IllegalStateException("VPN permission was revoked")
+        if (running) stopEngine()
+        Mobile.setPlatform(EnginePlatform())
         // The Go engine takes ownership of the descriptor and closes it.
         Mobile.startEngine(tun.detachFd().toLong(), config)
         running = true
@@ -108,12 +117,36 @@ class ProxyVpnService : VpnService() {
         main.post { controller.onVpnStatus(status, error) }
     }
 
+    /**
+     * Watches the physical networks. The first active network is the one the
+     * VPN started on; a different one later is a switch, which clears DNS
+     * caches and closes every flow so apps reconnect over the new network.
+     * (The default-network callback stops firing for an app excluded from
+     * its own VPN, so every non-VPN network event re-checks the active one.)
+     */
     private fun registerNetworkCallback() {
         val connectivity = getSystemService(ConnectivityManager::class.java)
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+            .build()
         val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) = Mobile.networkChanged()
+            private var current: Network? = connectivity.activeNetwork
+
+            override fun onAvailable(network: Network) = check()
+            override fun onLost(network: Network) = check()
+
+            private fun check() {
+                val active = connectivity.activeNetwork ?: return
+                val previous = current
+                current = active
+                if (previous != null && previous != active) {
+                    AppLog.i(TAG, "Network switched $previous -> $active")
+                    Mobile.networkChanged()
+                }
+            }
         }
-        connectivity.registerDefaultNetworkCallback(callback)
+        connectivity.registerNetworkCallback(request, callback)
         networkCallback = callback
     }
 
