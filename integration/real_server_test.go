@@ -85,10 +85,9 @@ func TestRealServerGlobalMode(t *testing.T) {
 	}
 	t.Logf("route: %s", routeOf(rec, "tcp", "www.gstatic.com"))
 
-	// UDP through the proxy: one SNTP request to time.google.com's anycast
-	// address. An IP target is used because servers built before the IPv4-first
-	// UDP fix may pick an unreachable IPv6 address for domain targets.
-	ntp := netip.MustParseAddr("216.239.35.0")
+	// UDP through the proxy by domain: one SNTP request. The engine hands the
+	// name to the server, so this also covers remote-DNS response handling.
+	ntp := lookup(t, app, "time.google.com")
 	conn, err := app.DialUDP(netip.AddrPortFrom(ntp, 123))
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +109,7 @@ func TestRealServerGlobalMode(t *testing.T) {
 	if d := time.Since(serverTime); d > time.Hour || d < -time.Hour {
 		t.Fatalf("NTP time %v is far from local time", serverTime)
 	}
-	t.Logf("route: %s; NTP time %s", routeOf(rec, "udp", ntp.String()), serverTime.UTC().Format(time.RFC3339))
+	t.Logf("route: %s; NTP time %s", routeOf(rec, "udp", "time.google.com"), serverTime.UTC().Format(time.RFC3339))
 	if rec.logged("Engine: tcp") && !rec.logged("PROXY via FINAL") {
 		t.Fatalf("global mode did not proxy\n%s", rec)
 	}
