@@ -10,7 +10,6 @@ import android.widget.Toast
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -22,19 +21,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.PlainTooltip
-import androidx.compose.material3.Text
-import androidx.compose.material3.TooltipAnchorPosition
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.rememberTooltipState
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,7 +29,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.res.stringResource
 import com.json2proxy.android.R
@@ -68,6 +53,7 @@ private sealed interface Screen {
     data object Scanner : Screen
     data class QrCode(val profile: ServerProfile, val link: String) : Screen
     data object Settings : Screen
+    data object Licenses : Screen
 }
 
 @Composable
@@ -178,46 +164,8 @@ private fun Page(
         // The editor replaces the scanner so going back returns to the list.
         Screen.Scanner -> QrScannerScreen(onClose = pop, onLink = { link -> replaceStack { it.dropLast(1) + Screen.Editor(null, link) } })
         is Screen.QrCode -> ServerQrScreen(profile = screen.profile, link = screen.link, onBack = pop)
-        Screen.Settings -> SettingsScreen(graph = graph, onBack = pop)
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun ScreenScaffold(
-    title: String,
-    onBack: (() -> Unit)?,
-    @DrawableRes backIcon: Int = R.drawable.ic_arrow_back,
-    backLabel: Int = R.string.action_back,
-    actions: @Composable RowScope.() -> Unit = {},
-    content: @Composable (PaddingValues) -> Unit,
-) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title) },
-                navigationIcon = {
-                    if (onBack != null) ToolbarIcon(backIcon, stringResource(backLabel), onClick = onBack)
-                },
-                actions = actions,
-            )
-        },
-        content = content,
-    )
-}
-
-/** Icon-only toolbar button; the label is read by screen readers and shown on long press. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun ToolbarIcon(@DrawableRes icon: Int, label: String, enabled: Boolean = true, onClick: () -> Unit) {
-    TooltipBox(
-        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
-        tooltip = { PlainTooltip { Text(label) } },
-        state = rememberTooltipState(),
-    ) {
-        IconButton(onClick = onClick, enabled = enabled) {
-            Icon(painterResource(icon), contentDescription = label)
-        }
+        Screen.Settings -> SettingsScreen(graph = graph, onBack = pop, onLicenses = { push(Screen.Licenses) })
+        Screen.Licenses -> LicensesScreen(onBack = pop)
     }
 }
 

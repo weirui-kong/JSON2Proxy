@@ -5,29 +5,14 @@ struct ToastView: View {
 
     var body: some View {
         Text(toast.message)
-            .font(.subheadline.weight(.medium))
+            .font(Typo.small)
             .multilineTextAlignment(.center)
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 18)
+            .foregroundStyle(Colors.textPrimary)
+            .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .modifier(ToastBackground())
+            .background(Colors.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Colors.border))
             .padding(.horizontal, 32)
-    }
-}
-
-/// Liquid Glass on iOS 26 and later, a frosted material below.
-private struct ToastBackground: ViewModifier {
-    private let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.glassEffect(.regular, in: shape)
-        } else {
-            content
-                .background(.regularMaterial, in: shape)
-                .overlay(shape.strokeBorder(.white.opacity(0.2), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
-        }
     }
 }
 

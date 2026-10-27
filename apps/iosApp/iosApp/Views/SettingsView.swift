@@ -4,69 +4,78 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    /// Closes the flip presentation (see SettingsPresenter); nil when pushed in a navigation stack.
+    var onClose: (() -> Void)?
     @State private var draft = SettingsDraft()
     @State private var rulesError: String?
     @State private var loaded = false
 
     var body: some View {
-        Form {
-            Section {
-                Picker("Mode", selection: $draft.mode) {
-                    ForEach(RoutingMode.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
+        TerminalPage {
+            PathTitle(String(localized: "settings"))
+
+            TerminalSection(title: String(localized: "Routing")) {
+                ChoiceList(options: RoutingMode.allCases, selection: $draft.mode, title: { $0.title }, detail: { $0.wire })
                 if draft.mode == .custom {
-                    TextEditor(text: $draft.rules)
-                        .font(.system(.footnote, design: .monospaced))
-                        .frame(minHeight: 160)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    if let rulesError {
-                        Text("Invalid rules: \(rulesError)").foregroundStyle(.red).font(.footnote)
+                    TerminalField(label: String(localized: "Rules"), error: rulesError.map { String(localized: "Invalid rules: \($0)") }, multiline: true) {
+                        TextEditor(text: $draft.rules)
+                            .font(Typo.small)
+                            .scrollContentBackground(.hidden)
+                            .frame(minHeight: 140)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                     }
                 }
-            } header: {
-                Text("Routing")
-            } footer: {
-                Text(draft.mode.footnote)
+                Note(draft.mode.footnote)
             }
 
-            Section {
-                TextField(draft.mode.defaultDoH, text: $draft.doh)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                TextField(AppSettings.companion.DEFAULT_BOOTSTRAP, text: $draft.bootstrap)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-            } header: {
-                Text("DNS")
-            } footer: {
-                Text("DoH resolves domains for routing. Bootstrap DNS only resolves the proxy server and the DoH host. Leave empty for the defaults.")
-            }
-
-            Section {
-                Toggle("Kill switch", isOn: $draft.killSwitch)
-                Toggle("Connect on demand", isOn: $draft.autoConnect)
-                Toggle("Strict kill switch", isOn: $draft.strictKillSwitch)
-            } header: {
-                Text("Protection")
-            } footer: {
-                Text("The kill switch blocks traffic while the proxy is down. Strict mode routes all system traffic through the tunnel and can affect AirDrop and local network features. Changes apply on the next connection.")
-            }
-
-            Section("Traffic units") {
-                Picker("Traffic units", selection: $draft.trafficUnit) {
-                    ForEach(TrafficUnit.allCases, id: \.self) { Text($0.title).tag($0) }
+            TerminalSection(title: String(localized: "DNS")) {
+                TerminalField(label: String(localized: "DoH URL")) {
+                    TextField(text: $draft.doh, prompt: placeholder(draft.mode.defaultDoH)) { Text("DoH URL") }
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
                 }
-                .pickerStyle(.inline)
-                .labelsHidden()
+                TerminalField(label: String(localized: "Bootstrap DNS")) {
+                    TextField(text: $draft.bootstrap, prompt: placeholder(AppSettings.companion.DEFAULT_BOOTSTRAP)) { Text("Bootstrap DNS") }
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+                Note(String(localized: "DoH resolves domains for routing. Bootstrap DNS only resolves the proxy server and the DoH host. Leave empty for the defaults."))
             }
+
+            TerminalSection(title: String(localized: "Protection")) {
+                SwitchRow(label: String(localized: "Kill switch"), isOn: $draft.killSwitch)
+                SwitchRow(label: String(localized: "Connect on demand"), isOn: $draft.autoConnect)
+                SwitchRow(label: String(localized: "Strict kill switch"), isOn: $draft.strictKillSwitch)
+                Note(String(localized: "The kill switch blocks traffic while the proxy is down. Strict mode routes all system traffic through the tunnel and can affect AirDrop and local network features. Changes apply on the next connection."))
+            }
+
+            TerminalSection(title: String(localized: "Traffic units")) {
+                ChoiceList(options: TrafficUnit.allCases, selection: $draft.trafficUnit, title: { $0.title })
+            }
+        } bottom: {
+            // A small, quiet entry at the very end of the page.
+            NavigationLink {
+                LicensesView()
+            } label: {
+                Text("Open-source licenses")
+            }
+            .buttonStyle(SecondaryButtonStyle(color: Colors.textSecondary))
+            .frame(maxWidth: .infinity)
         }
-        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if let onClose {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(action: onClose) { Label("Close", systemImage: "xmark") }
+                        .labelStyle(.iconOnly)
+                }
+            }
             ToolbarItem(placement: .confirmationAction) {
-                Button(action: save) { Label("Save", systemImage: "checkmark") }
-                    .labelStyle(.iconOnly)
+                Button("Save", action: save)
+                    .font(Typo.bodyBold)
+                    .foregroundStyle(Colors.accent)
             }
         }
         .onAppear {
@@ -76,6 +85,10 @@ struct SettingsView: View {
         }
     }
 
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
+    }
+
     private func save() {
         if draft.mode == .custom {
             rulesError = model.validateRules(draft.rules)
@@ -83,7 +96,7 @@ struct SettingsView: View {
         }
         model.update(draft.settings)
         ToastCenter.shared.show(String(localized: "Settings saved"))
-        dismiss()
+        close()
     }
 }
 
@@ -169,8 +182,8 @@ extension RoutingMode {
 extension TrafficUnit {
     var title: String {
         switch self {
-        case .bytes: String(localized: "Bytes (KB/s, MB/s, GB/s)")
-        case .bits: String(localized: "Bits (Kb/s, Mb/s, Gb/s)")
+        case .bytes: String(localized: "Bytes")
+        case .bits: String(localized: "Bits")
         }
     }
 }

@@ -121,7 +121,48 @@
     <string name="traffic_download">下載</string>
     <string name="traffic_connections">TCP %1$d · UDP %2$d</string>
     <string name="section_traffic_unit">流量單位</string>
-    <string name="traffic_unit_bytes">位元組（KB/s、MB/s、GB/s）</string>
-    <string name="traffic_unit_bits">位元（Kb/s、Mb/s、Gb/s）</string>
+    <string name="traffic_unit_bytes">位元組</string>
+    <string name="traffic_unit_bits">位元</string>
 
+    <!-- 終端機風格 -->
+    <string name="path_servers">伺服器</string>
+    <string name="path_settings">設定</string>
+    <string name="path_new">新增</string>
+    <string name="path_edit">編輯</string>
+    <string name="path_qr">QR Code</string>
+    <string name="traffic_legend">流量 · 60 秒</string>
+    <string name="traffic_waiting">連線後顯示即時流量</string>
+    <string name="traffic_chart_description">下載 %1$s，上傳 %2$s</string>
+    <string name="home_session_description">%1$s，分流：%2$s</string>
+    <string name="kill_switch_on">開啟</string>
+    <string name="kill_switch_off">關閉</string>
+    <string name="summary_total">總數</string>
+    <string name="summary_best">最低延遲</string>
+    <string name="summary_failed">無法連線</string>
+    <string name="servers_note_selected">目前選用 · 點選即切換</string>
+    <string name="servers_note_latency">延遲為 TCP 連線時間</string>
+
+    <string name="settings_licenses">開放原始碼授權</string>
+    <string name="path_licenses">授權</string>
+    <string name="licenses_intro">本 App 使用以下開放原始碼元件與資料。</string>
+    <string name="notice_category_library">程式庫</string>
+    <string name="notice_category_font">字體</string>
+    <string name="notice_category_icons">圖示</string>
+    <string name="notice_category_data">資料</string>
+    <string name="notice_license_public_data">公開統計資料</string>
+    <string name="notice_show_text">顯示授權全文</string>
+    <string name="notice_hide_text">隱藏授權全文</string>
+    <string name="notice_purpose_go_runtime">網路核心的執行環境</string>
+    <string name="notice_purpose_go_extensions">DNS、系統呼叫與行動平台綁定</string>
+    <string name="notice_purpose_gvisor">VPN 通道內的 TCP/IP 網路堆疊</string>
+    <string name="notice_purpose_btree">gVisor 使用的資料結構</string>
+    <string name="notice_purpose_kotlin">共用模組的程式語言執行環境</string>
+    <string name="notice_purpose_coroutines">非同步工作與狀態更新</string>
+    <string name="notice_purpose_serialization">設定與統計資料的 JSON 處理</string>
+    <string name="notice_purpose_skie">讓 Swift 使用共用模組</string>
+    <string name="notice_purpose_androidx">Android 介面、生命週期與相機</string>
+    <string name="notice_purpose_zxing">QR Code 的產生與辨識</string>
+    <string name="notice_purpose_jetbrains_mono">介面的等寬字體</string>
+    <string name="notice_purpose_material_icons">Android 介面圖示</string>
+    <string name="notice_purpose_apnic">GeoIP CN 位址表的來源</string>
 </resources>

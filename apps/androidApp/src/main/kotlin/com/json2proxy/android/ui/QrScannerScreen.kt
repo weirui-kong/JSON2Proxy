@@ -1,7 +1,6 @@
 package com.json2proxy.android.ui
 
 import android.Manifest
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -45,11 +44,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -62,6 +59,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -80,7 +78,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -115,20 +112,17 @@ private object ScannerLayout {
     val hintHeight = 44.dp
     val hintBottomInset = 24.dp
     const val DIM_ALPHA = 0.35f
-    const val BUTTON_ALPHA = 0.35f
-    const val HINT_ALPHA = 0.45f
     const val SUCCESS_DISMISS_MILLIS = 350L
     const val HINT_RESET_MILLIS = 2000L
 
     /** Decode a little beyond the viewfinder so codes touching its edge still read. */
     const val CROP_MARGIN = 1.15f
-    val warning = Color(0xFFFFCC00)
 }
 
 /**
  * Full-screen camera scanner for server QR codes, styled after the iOS one:
  * dimmed preview with a rounded viewfinder, breathing corner brackets that snap
- * onto an accepted code, close and flashlight buttons, and a hint pill that
+ * onto an accepted code, close and flashlight buttons, and a hint card that
  * briefly shows why a code was rejected.
  */
 @Composable
@@ -152,8 +146,6 @@ internal fun QrScannerScreen(onClose: () -> Unit, onLink: (ServerLink) -> Unit) 
             permissionDenied = false
         }
     }
-    LightStatusBarIcons()
-
     val geometry = remember { ScanGeometry() }
     val bracket = remember { Animatable(Rect.Zero, Rect.VectorConverter) }
     var handled by remember { mutableStateOf(false) }
@@ -196,7 +188,7 @@ internal fun QrScannerScreen(onClose: () -> Unit, onLink: (ServerLink) -> Unit) 
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Colors.canvas)) {
         val density = LocalDensity.current
         val viewfinder = with(density) {
             val side = min(maxWidth.toPx() * ScannerLayout.VIEWFINDER_WIDTH_RATIO, ScannerLayout.viewfinderMaxSide.toPx())
@@ -231,10 +223,11 @@ internal fun QrScannerScreen(onClose: () -> Unit, onLink: (ServerLink) -> Unit) 
                 addRect(Rect(Offset.Zero, size))
                 addRoundRect(RoundRect(viewfinder, CornerRadius(radius)))
             }
+            // Dims the camera picture itself, so it stays black rather than a palette color.
             drawPath(dim, Color.Black.copy(alpha = ScannerLayout.DIM_ALPHA))
             drawPath(
                 bracketPath(bracket.value, radius, ScannerLayout.bracketLength.toPx()),
-                Color.White.copy(alpha = if (handled) 1f else breathing),
+                (if (rejection != null) Colors.danger else Colors.accent).copy(alpha = if (handled) 1f else breathing),
                 style = Stroke(ScannerLayout.bracketLineWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
             )
         }
@@ -243,11 +236,12 @@ internal fun QrScannerScreen(onClose: () -> Unit, onLink: (ServerLink) -> Unit) 
             modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            OverlayButton(R.drawable.ic_close, stringResource(R.string.action_close), onClose)
+            SquareIconButton(R.drawable.ic_close, stringResource(R.string.action_close), onClick = onClose)
             if (camera?.cameraInfo?.hasFlashUnit() == true) {
-                OverlayButton(
+                SquareIconButton(
                     if (torchOn) R.drawable.ic_flashlight_on else R.drawable.ic_flashlight_off,
                     stringResource(R.string.action_flashlight),
+                    tint = if (torchOn) Colors.warning else Colors.textPrimary,
                 ) {
                     torchOn = !torchOn
                     camera?.cameraControl?.enableTorch(torchOn)
@@ -255,23 +249,24 @@ internal fun QrScannerScreen(onClose: () -> Unit, onLink: (ServerLink) -> Unit) 
             }
         }
 
-        Row(
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(start = 24.dp, end = 24.dp, bottom = ScannerLayout.hintBottomInset)
-                .heightIn(min = ScannerLayout.hintHeight)
-                .background(Color.Black.copy(alpha = ScannerLayout.HINT_ALPHA), CircleShape)
-                .padding(start = 16.dp, end = 18.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(start = 20.dp, end = 20.dp, bottom = ScannerLayout.hintBottomInset)
+                .heightIn(min = ScannerLayout.hintHeight),
         ) {
-            Icon(
-                painterResource(if (rejection == null) R.drawable.ic_qr_scanner else R.drawable.ic_warning),
-                contentDescription = null,
-                tint = if (rejection == null) Color.White else ScannerLayout.warning,
-            )
-            Text(rejection ?: stringResource(R.string.scanner_hint), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+            val reason = rejection
+            if (reason != null) {
+                Banner(BannerKind.Danger, reason, icon = R.drawable.ic_warning)
+            } else {
+                TerminalCard {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Glyph(stringResource(R.string.glyph_selected) + " ", Colors.accent, Type.body.copy(fontWeight = FontWeight.Bold))
+                        Text(stringResource(R.string.scanner_hint), style = Type.small, color = Colors.textPrimary)
+                    }
+                }
+            }
         }
     }
 
@@ -494,31 +489,6 @@ private fun bracketPath(rect: Rect, cornerRadius: Float, bracketLength: Float): 
     lineTo(l + r, b)
     arcTo(Rect(l, b - 2 * r, l + 2 * r, b), 90f, 90f, false)
     lineTo(l, b - r - len)
-}
-
-@Composable
-private fun OverlayButton(@DrawableRes icon: Int, description: String, onClick: () -> Unit) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier
-            .size(ScannerLayout.buttonSide)
-            .background(Color.Black.copy(alpha = ScannerLayout.BUTTON_ALPHA), CircleShape),
-    ) {
-        Icon(painterResource(icon), contentDescription = description, tint = Color.White)
-    }
-}
-
-/** White status bar icons over the camera; restores the app's dark icons on exit. */
-@Composable
-private fun LightStatusBarIcons() {
-    val view = LocalView.current
-    DisposableEffect(view) {
-        val window = (view.context as? Activity)?.window ?: return@DisposableEffect onDispose {}
-        val controller = WindowCompat.getInsetsController(window, view)
-        val previous = controller.isAppearanceLightStatusBars
-        controller.isAppearanceLightStatusBars = false
-        onDispose { controller.isAppearanceLightStatusBars = previous }
-    }
 }
 
 private fun Context.hasCameraPermission() =

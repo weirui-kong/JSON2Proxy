@@ -5,10 +5,17 @@ struct JSON2ProxyApp: App {
     @StateObject private var model = AppModel()
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        Appearance.apply()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(model)
+                // Dark only, whatever the system appearance.
+                .preferredColorScheme(.dark)
+                .tint(Colors.accent)
                 .task { await model.observe() }
                 // Ask for network access right after installation (see NetworkAccess).
                 .task { await model.networkAccess.prime() }

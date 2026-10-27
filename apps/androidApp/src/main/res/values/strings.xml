@@ -123,7 +123,48 @@
     <string name="traffic_download">Download</string>
     <string name="traffic_connections">TCP %1$d · UDP %2$d</string>
     <string name="section_traffic_unit">Traffic units</string>
-    <string name="traffic_unit_bytes">Bytes (KB/s, MB/s, GB/s)</string>
-    <string name="traffic_unit_bits">Bits (Kb/s, Mb/s, Gb/s)</string>
+    <string name="traffic_unit_bytes">Bytes</string>
+    <string name="traffic_unit_bits">Bits</string>
 
+    <!-- Terminal style -->
+    <string name="path_servers">servers</string>
+    <string name="path_settings">settings</string>
+    <string name="path_new">new</string>
+    <string name="path_edit">edit</string>
+    <string name="path_qr">qr</string>
+    <string name="traffic_legend">traffic · 60 s</string>
+    <string name="traffic_waiting">Live traffic appears once connected</string>
+    <string name="traffic_chart_description">Download %1$s, upload %2$s</string>
+    <string name="home_session_description">%1$s, routing: %2$s</string>
+    <string name="kill_switch_on">On</string>
+    <string name="kill_switch_off">Off</string>
+    <string name="summary_total">Total</string>
+    <string name="summary_best">Best</string>
+    <string name="summary_failed">Unreachable</string>
+    <string name="servers_note_selected">Selected · tap a server to switch</string>
+    <string name="servers_note_latency">Latency is the TCP connect time</string>
+
+    <string name="settings_licenses">Open-source licenses</string>
+    <string name="path_licenses">licenses</string>
+    <string name="licenses_intro">This app uses the following open-source components and data.</string>
+    <string name="notice_category_library">Libraries</string>
+    <string name="notice_category_font">Fonts</string>
+    <string name="notice_category_icons">Icons</string>
+    <string name="notice_category_data">Data</string>
+    <string name="notice_license_public_data">Public statistics</string>
+    <string name="notice_show_text">Show license text</string>
+    <string name="notice_hide_text">Hide license text</string>
+    <string name="notice_purpose_go_runtime">Runtime of the networking core</string>
+    <string name="notice_purpose_go_extensions">DNS, system calls and mobile bindings</string>
+    <string name="notice_purpose_gvisor">TCP/IP stack inside the VPN tunnel</string>
+    <string name="notice_purpose_btree">Data structure used by gVisor</string>
+    <string name="notice_purpose_kotlin">Language runtime of the shared module</string>
+    <string name="notice_purpose_coroutines">Asynchronous work and state updates</string>
+    <string name="notice_purpose_serialization">JSON for settings and statistics</string>
+    <string name="notice_purpose_skie">Exposes the shared module to Swift</string>
+    <string name="notice_purpose_androidx">Android interface, lifecycle and camera</string>
+    <string name="notice_purpose_zxing">Generating and reading QR codes</string>
+    <string name="notice_purpose_jetbrains_mono">Monospaced typeface of the interface</string>
+    <string name="notice_purpose_material_icons">Android interface icons</string>
+    <string name="notice_purpose_apnic">Source of the GeoIP CN address table</string>
 </resources>
