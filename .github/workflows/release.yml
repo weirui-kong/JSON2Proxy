@@ -1,0 +1,173 @@
+# Every new commit on main: unit tests, then an Android APK and an unsigned
+# iOS IPA built with the next version, then a GitHub release with both.
+# See scripts/ci/next-version.sh for how the version is chosen.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version part to increment
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+# One release at a time, so two pushes never compute the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: "21"
+  ANDROID_PLATFORM: platforms;android-37.0
+  ANDROID_NDK_VERSION: 28.2.13676358
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.next.outputs.name }}
+      code: ${{ steps.next.outputs.code }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: next
+        env:
+          BUMP: ${{ inputs.bump }}
+          COMMIT_MESSAGES: ${{ join(github.event.commits.*.message, '\n') }}
+        run: scripts/ci/next-version.sh | tee -a "$GITHUB_OUTPUT"
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Go tests
+        run: go test ./...
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Android SDK platform
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "$ANDROID_PLATFORM" > /dev/null
+      - name: Shared module tests
+        working-directory: apps
+        run: ./gradlew :shared:testAndroidHostTest
+
+  android:
+    needs: [version, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Android SDK platform and NDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "$ANDROID_PLATFORM" "ndk;$ANDROID_NDK_VERSION" > /dev/null
+      - name: Go core
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
+          scripts/build-mobile-core.sh android
+      - name: APK
+        working-directory: apps
+        env:
+          VERSION: ${{ needs.version.outputs.name }}
+          CODE: ${{ needs.version.outputs.code }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          out="$RUNNER_TEMP/out"
+          mkdir -p "$out"
+          version=(-PappVersionName="$VERSION" -PappVersionCode="$CODE")
+          if [[ -n "$KEYSTORE_BASE64" ]]; then
+            export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
+            ./gradlew :androidApp:assembleRelease "${version[@]}"
+            rm -f "$ANDROID_KEYSTORE_PATH"
+            cp androidApp/build/outputs/apk/release/androidApp-release.apk "$out/JSON2Proxy-$VERSION-android.apk"
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set: publishing a debug-signed APK, which cannot update an earlier release in place."
+            ./gradlew :androidApp:assembleDebug "${version[@]}"
+            cp androidApp/build/outputs/apk/debug/androidApp-debug.apk "$out/JSON2Proxy-$VERSION-android-debug.apk"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: ${{ runner.temp }}/out/*.apk
+          if-no-files-found: error
+
+  ios:
+    needs: [version, test]
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v5
+      # The shared module also declares its Android target, which Gradle configures.
+      - name: Android SDK platform
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "$ANDROID_PLATFORM" > /dev/null
+      - name: Go core
+        run: scripts/build-mobile-core.sh ios
+      - name: Unsigned IPA
+        env:
+          VERSION: ${{ needs.version.outputs.name }}
+          CODE: ${{ needs.version.outputs.code }}
+        run: |
+          archive="$RUNNER_TEMP/JSON2Proxy.xcarchive"
+          xcodebuild -project apps/iosApp/iosApp.xcodeproj -scheme iosApp -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$archive" archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$CODE"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload" "$RUNNER_TEMP/out"
+          cp -R "$archive/Products/Applications/JSON2Proxy.app" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$RUNNER_TEMP/out/JSON2Proxy-$VERSION-ios-unsigned.ipa" Payload)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: ${{ runner.temp }}/out/*.ipa
+          if-no-files-found: error
+
+  release:
+    needs: [version, android, ios]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.version.outputs.name }}
+        run: |
+          # A re-run of a published version replaces its files instead of failing.
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+          fi
