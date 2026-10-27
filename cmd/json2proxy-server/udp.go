@@ -177,8 +177,7 @@ func (a *app) serveUDP(tunnel net.Conn, writer *frameWriter, session *protocol.S
 	}
 	_ = tunnel.SetDeadline(time.Time{})
 
-	recent := make(map[string]time.Time)
-	var recentMu sync.Mutex
+	destinations := newUDPDestinations(a.cfg.UDP.MaxDestinationsPerAssociation, a.udpIdleTimeout())
 	var lastTargetMu sync.Mutex
 	lastTarget := "-"
 	lastActivity := atomic.Int64{}
@@ -230,32 +229,16 @@ func (a *app) serveUDP(tunnel net.Conn, writer *frameWriter, session *protocol.S
 					stats.policyDrops.Add(1)
 					continue
 				}
-				recentMu.Lock()
-				now := time.Now()
-				idleTimeout := a.udpIdleTimeout()
-				for endpoint, lastSeen := range recent {
-					if now.Sub(lastSeen) > idleTimeout {
-						delete(recent, endpoint)
-					}
-				}
-				recentMu.Unlock()
-				admit := func(key string) bool {
-					recentMu.Lock()
-					defer recentMu.Unlock()
-					_, exists := recent[key]
-					return exists || len(recent) < a.cfg.UDP.MaxDestinationsPerAssociation
-				}
-				resolved, sent := sendUDPDatagram(egress, targets, data, admit)
+				destinations.prune(time.Now())
+				resolved, sent := sendUDPDatagram(egress, targets, data, destinations.admit)
 				if !sent {
 					stats.policyDrops.Add(1)
 					continue
 				}
-				now = time.Now()
-				recentMu.Lock()
-				recent[resolved] = now
-				recentMu.Unlock()
+				now := time.Now()
+				destinations.sent(resolved, now)
 				lastTargetMu.Lock()
-				lastTarget = resolved
+				lastTarget = resolved.key
 				lastTargetMu.Unlock()
 				stats.packetsUp.Add(1)
 				stats.bytesUp.Add(uint64(len(data)))
@@ -300,16 +283,8 @@ func (a *app) serveUDP(tunnel net.Conn, writer *frameWriter, session *protocol.S
 				stats.oversizeDrops.Add(1)
 				continue
 			}
-			endpoint := net.JoinHostPort(host, strconv.Itoa(int(port)))
 			now := time.Now()
-			recentMu.Lock()
-			expiry, allowed := recent[endpoint]
-			if allowed && now.Sub(expiry) > a.udpIdleTimeout() {
-				delete(recent, endpoint)
-				allowed = false
-			}
-			recentMu.Unlock()
-			if !allowed {
+			if !destinations.allowResponse(host, port, now) {
 				stats.policyDrops.Add(1)
 				continue
 			}
@@ -355,9 +330,7 @@ func (a *app) serveUDP(tunnel net.Conn, writer *frameWriter, session *protocol.S
 	lastTargetMu.Lock()
 	target := lastTarget
 	lastTargetMu.Unlock()
-	recentMu.Lock()
-	distinctTargets := len(recent)
-	recentMu.Unlock()
+	distinctTargets := destinations.count()
 	reason := "completed"
 	if endErr != nil && !errors.Is(endErr, io.EOF) && !errors.Is(endErr, net.ErrClosed) {
 		reason = "udp_failed"
@@ -503,17 +476,97 @@ func (a *app) lookupUDPHost(ctx context.Context, host string) ([]net.IP, error) 
 }
 
 // sendUDPDatagram sends data to the first target that admit allows and the
-// egress accepts, and returns that target's key.
-func sendUDPDatagram(egress udpEgress, targets []udpTarget, data []byte, admit func(key string) bool) (string, bool) {
+// egress accepts, and returns that target.
+func sendUDPDatagram(egress udpEgress, targets []udpTarget, data []byte, admit func(key string) bool) (udpTarget, bool) {
 	for _, target := range targets {
 		if !admit(target.key) {
 			continue
 		}
 		if err := egress.WriteDatagram(target.host, target.port, data); err == nil {
-			return target.key, true
+			return target, true
 		}
 	}
-	return "", false
+	return udpTarget{}, false
+}
+
+// udpDestinations is an association's set of recently used destinations,
+// which decides which responses may reach the client. Numeric targets match
+// responses exactly by IP:port. A name sent to a remote-DNS SOCKS5 outbound
+// comes back from whatever IP the outbound resolved, so a response from an
+// unknown IP is admitted when a name target on the same port is recent, and
+// that IP:port joins the set.
+type udpDestinations struct {
+	mu        sync.Mutex
+	endpoints map[string]time.Time
+	namePorts map[uint16]time.Time
+	limit     int
+	idle      time.Duration
+}
+
+func newUDPDestinations(limit int, idle time.Duration) *udpDestinations {
+	return &udpDestinations{
+		endpoints: make(map[string]time.Time),
+		namePorts: make(map[uint16]time.Time),
+		limit:     limit,
+		idle:      idle,
+	}
+}
+
+func (d *udpDestinations) prune(now time.Time) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for key, lastSeen := range d.endpoints {
+		if now.Sub(lastSeen) > d.idle {
+			delete(d.endpoints, key)
+		}
+	}
+	for port, lastSeen := range d.namePorts {
+		if now.Sub(lastSeen) > d.idle {
+			delete(d.namePorts, port)
+		}
+	}
+}
+
+// admit reports whether a datagram may be sent to key without exceeding the
+// destination limit.
+func (d *udpDestinations) admit(key string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	_, exists := d.endpoints[key]
+	return exists || len(d.endpoints) < d.limit
+}
+
+func (d *udpDestinations) sent(target udpTarget, now time.Time) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.endpoints[target.key] = now
+	if net.ParseIP(target.host) == nil {
+		d.namePorts[target.port] = now
+	}
+}
+
+func (d *udpDestinations) allowResponse(host string, port uint16, now time.Time) bool {
+	endpoint := net.JoinHostPort(host, strconv.Itoa(int(port)))
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if lastSeen, ok := d.endpoints[endpoint]; ok {
+		if now.Sub(lastSeen) <= d.idle {
+			return true
+		}
+		delete(d.endpoints, endpoint)
+	}
+	lastSeen, ok := d.namePorts[port]
+	if !ok || now.Sub(lastSeen) > d.idle || net.ParseIP(host) == nil || len(d.endpoints) >= d.limit {
+		return false
+	}
+	d.endpoints[endpoint] = now
+	return true
+}
+
+func (d *udpDestinations) count() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return len(d.endpoints)
 }
 
 func udpNeverAllowed(ip net.IP) bool {

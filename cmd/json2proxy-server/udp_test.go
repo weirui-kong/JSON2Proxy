@@ -169,16 +169,16 @@ func TestSendUDPDatagramFallsBackWhenSendFails(t *testing.T) {
 
 	// An IPv6-only host fails IPv4 sends right away and uses IPv6.
 	egress := &recordingEgress{fail: map[string]bool{"8.8.8.8:53": true}}
-	key, ok := sendUDPDatagram(egress, targets, []byte("q"), allowAll)
-	if !ok || key != "[2001:4860:4860::8888]:53" || len(egress.sent) != 2 {
-		t.Fatalf("key = %q ok = %v sent = %v", key, ok, egress.sent)
+	target, ok := sendUDPDatagram(egress, targets, []byte("q"), allowAll)
+	if !ok || target.key != "[2001:4860:4860::8888]:53" || len(egress.sent) != 2 {
+		t.Fatalf("target = %+v ok = %v sent = %v", target, ok, egress.sent)
 	}
 
 	// When IPv4 works, IPv6 is never tried.
 	egress = &recordingEgress{}
-	key, ok = sendUDPDatagram(egress, targets, []byte("q"), allowAll)
-	if !ok || key != "8.8.8.8:53" || len(egress.sent) != 1 {
-		t.Fatalf("key = %q ok = %v sent = %v", key, ok, egress.sent)
+	target, ok = sendUDPDatagram(egress, targets, []byte("q"), allowAll)
+	if !ok || target.key != "8.8.8.8:53" || len(egress.sent) != 1 {
+		t.Fatalf("target = %+v ok = %v sent = %v", target, ok, egress.sent)
 	}
 
 	// Every send failing drops the datagram.
@@ -190,9 +190,52 @@ func TestSendUDPDatagramFallsBackWhenSendFails(t *testing.T) {
 	// A full destination set skips new targets without sending.
 	egress = &recordingEgress{}
 	onlyKnown := func(key string) bool { return key == "[2001:4860:4860::8888]:53" }
-	key, ok = sendUDPDatagram(egress, targets, []byte("q"), onlyKnown)
-	if !ok || key != "[2001:4860:4860::8888]:53" || len(egress.sent) != 1 {
-		t.Fatalf("key = %q ok = %v sent = %v", key, ok, egress.sent)
+	target, ok = sendUDPDatagram(egress, targets, []byte("q"), onlyKnown)
+	if !ok || target.key != "[2001:4860:4860::8888]:53" || len(egress.sent) != 1 {
+		t.Fatalf("target = %+v ok = %v sent = %v", target, ok, egress.sent)
+	}
+}
+
+func TestUDPDestinationsExactMatchForNumericTargets(t *testing.T) {
+	d := newUDPDestinations(8, time.Minute)
+	now := time.Unix(1000, 0)
+	d.sent(udpTarget{host: "8.8.8.8", port: 53, key: "8.8.8.8:53"}, now)
+	if !d.allowResponse("8.8.8.8", 53, now) {
+		t.Fatal("response from the exact destination rejected")
+	}
+	if d.allowResponse("8.8.4.4", 53, now) || d.allowResponse("8.8.8.8", 54, now) {
+		t.Fatal("response from a different endpoint admitted for a numeric target")
+	}
+	if d.allowResponse("8.8.8.8", 53, now.Add(2*time.Minute)) {
+		t.Fatal("expired destination still admitted")
+	}
+}
+
+// A remote-DNS outbound answers from the IP it resolved, not from the name.
+func TestUDPDestinationsLearnResponsesForRemoteNames(t *testing.T) {
+	d := newUDPDestinations(2, time.Minute)
+	now := time.Unix(1000, 0)
+	d.sent(udpTarget{host: "time.google.com", port: 123, key: "time.google.com:123"}, now)
+	if d.allowResponse("216.239.35.0", 124, now) {
+		t.Fatal("response on another port admitted")
+	}
+	if !d.allowResponse("216.239.35.0", 123, now) {
+		t.Fatal("response for a remote name rejected")
+	}
+	if d.count() != 2 {
+		t.Fatalf("learned endpoint not recorded, count = %d", d.count())
+	}
+	// The learned endpoint now matches exactly; a third endpoint would
+	// exceed the destination limit of 2.
+	if !d.allowResponse("216.239.35.0", 123, now) || d.allowResponse("216.239.35.4", 123, now) {
+		t.Fatal("destination limit not applied to learned endpoints")
+	}
+	if d.allowResponse("216.239.35.0", 123, now.Add(2*time.Minute)) {
+		t.Fatal("expired name port still admitted")
+	}
+	d.prune(now.Add(2 * time.Minute))
+	if d.count() != 0 {
+		t.Fatalf("prune left %d endpoints", d.count())
 	}
 }
 
