@@ -8,6 +8,7 @@ import com.json2proxy.android.platform.PrefsStore
 import com.json2proxy.android.vpn.AndroidVpnBackend
 import com.json2proxy.core.mobile.Mobile
 import com.json2proxy.shared.AppGraph
+import java.io.File
 
 class JsonProxyApp : Application() {
     lateinit var graph: AppGraph
@@ -24,6 +25,7 @@ class JsonProxyApp : Application() {
             backend = AndroidVpnBackend(this),
             // The engine runs in the app process; Android does not cap it like iOS.
             memoryLimitMb = 0,
+            totalsFile = File(filesDir, "traffic-totals.json").path,
         )
     }
 }

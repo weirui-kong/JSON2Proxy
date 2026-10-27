@@ -77,6 +77,36 @@ class TrafficStatsTest {
     }
 
     @Test
+    fun formatsAmountsWithoutPerSecond() {
+        assertEquals("0.29 KB", TrafficFormat.amount(300, TrafficUnit.Bytes))
+        assertEquals("1.00 GB", TrafficFormat.amount(1_073_741_824, TrafficUnit.Bytes))
+        assertEquals("8.00 Mb", TrafficFormat.amount(1_000_000, TrafficUnit.Bits))
+    }
+
+    @Test
+    fun cumulativeTotalsAndExtensionMemory() {
+        val sampler = TrafficSampler()
+        val summary = sampler.sample("""{"time":1000,"up":10,"down":20,"total_up":5000,"total_down":90000}""")!!
+        assertEquals(5000, summary.cumulativeUpload)
+        assertEquals(90000, summary.cumulativeDownload)
+        assertNull(summary.memory)
+
+        val withMemory = sampler.sample("""{"time":2000,"memory":{"used":20971520,"available":31457280}}""")!!
+        assertEquals(MemoryUsage(20_971_520, 31_457_280), withMemory.memory)
+        assertEquals(52_428_800, withMemory.memory?.limitBytes)
+    }
+
+    @Test
+    fun memoryPressureLevels() {
+        assertEquals(MemoryPressure.Normal, MemoryUsage(69, 31).pressure)
+        assertEquals(MemoryPressure.Elevated, MemoryUsage(70, 30).pressure)
+        assertEquals(MemoryPressure.Critical, MemoryUsage(85, 15).pressure)
+        // The Simulator reports no limit.
+        assertNull(MemoryUsage(40_000_000, 0).limitBytes)
+        assertEquals(MemoryPressure.Normal, MemoryUsage(40_000_000, 0).pressure)
+    }
+
+    @Test
     fun historyKeepsTheLastMinuteInOrder() {
         var feed = TrafficFeed.Empty
         repeat(65) { i -> feed = feed.next(stats(up = i.toLong(), down = i * 10L)) }

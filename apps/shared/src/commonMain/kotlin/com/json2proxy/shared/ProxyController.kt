@@ -45,6 +45,8 @@ class ProxyController(
     private val core: CoreBridge,
     /** Go heap limit passed to the engine; iOS sets it for the extension. */
     private val memoryLimitMb: Int = 0,
+    /** Where the engine keeps the traffic totals across runs; empty keeps none. */
+    private val totalsFile: String = "",
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
@@ -126,7 +128,7 @@ class ProxyController(
         val profile = profiles.selected ?: return fail(FailureReason.NoServerSelected, "")
         val secret = profiles.secret(profile.id) ?: return fail(FailureReason.MissingSecret, profile.name)
         activeServer = profile.name
-        val config = EngineConfig.build(profile, secret, settings.current, memoryLimitMb)
+        val config = EngineConfig.build(profile, secret, settings.current, memoryLimitMb, totalsFile)
         runningKey = ConnectionKey(config, connectionSettings())
         return config
     }
@@ -145,7 +147,7 @@ class ProxyController(
             disconnect()
             return
         }
-        val key = ConnectionKey(EngineConfig.build(profile, secret, settings.current, memoryLimitMb), connectionSettings())
+        val key = ConnectionKey(EngineConfig.build(profile, secret, settings.current, memoryLimitMb, totalsFile), connectionSettings())
         if (key == running) return
         runningKey = key
         activeServer = profile.name

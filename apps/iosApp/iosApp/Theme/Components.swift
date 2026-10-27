@@ -3,31 +3,56 @@ import SwiftUI
 
 /// A full page on the canvas: scrolling content, with `bottom` resting on the
 /// bottom edge when the content is shorter than the screen.
-struct TerminalPage<Content: View, Bottom: View>: View {
+///
+/// `footer` is not part of the page: it follows the content that fills the
+/// safe area, in the bottom inset. On Face ID iPhones it sits just above the
+/// home indicator; where there is no inset it only shows once scrolled to.
+struct TerminalPage<Content: View, Bottom: View, Footer: View>: View {
     @ViewBuilder var content: Content
     @ViewBuilder var bottom: Bottom
+    @ViewBuilder var footer: Footer
 
     var body: some View {
         GeometryReader { geometry in
+            let inset = geometry.safeAreaInsets.bottom
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    content
-                    Spacer(minLength: 0)
-                    bottom
+                VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        content
+                        Spacer(minLength: 0)
+                        bottom
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .topLeading)
+                    footer
+                        .padding(.horizontal, 20)
+                        .frame(maxWidth: .infinity, minHeight: Footer.self == EmptyView.self ? 0 : TerminalPageFooter.height)
+                    // Keeps the end of the page above the home indicator when scrolled down.
+                    Color.clear.frame(height: max(inset - (Footer.self == EmptyView.self ? 0 : TerminalPageFooter.height), 0))
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .topLeading)
             }
+            .ignoresSafeArea(.container, edges: .bottom)
         }
         .background(Colors.canvas.ignoresSafeArea())
         .foregroundStyle(Colors.textPrimary)
     }
 }
 
-extension TerminalPage where Bottom == EmptyView {
+enum TerminalPageFooter {
+    /// Leaves the lower part of the 34 pt home indicator inset free.
+    static let height: CGFloat = 20
+}
+
+extension TerminalPage where Footer == EmptyView {
+    init(@ViewBuilder content: () -> Content, @ViewBuilder bottom: () -> Bottom) {
+        self.init(content: content, bottom: bottom, footer: { EmptyView() })
+    }
+}
+
+extension TerminalPage where Bottom == EmptyView, Footer == EmptyView {
     init(@ViewBuilder content: () -> Content) {
-        self.init(content: content, bottom: { EmptyView() })
+        self.init(content: content, bottom: { EmptyView() }, footer: { EmptyView() })
     }
 }
 

@@ -104,8 +104,9 @@ configuring a SOCKS5 proxy.
 - **Protection**: a kill switch blocks proxied traffic instead of falling back
   to direct connections, and flows are closed when the device switches
   networks.
-- **Statistics**: live TCP/UDP connection counts, upload/download speeds and a
-  one-minute traffic chart.
+- **Statistics**: live TCP/UDP connection counts, upload/download speeds, a
+  one-minute traffic chart and upload/download totals kept across connections.
+  On iOS the home screen also shows the memory used by the tunnel extension.
 
 The interface is available in English and Traditional Chinese. See
 [apps/README.md](apps/README.md) for build instructions.

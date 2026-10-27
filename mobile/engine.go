@@ -11,6 +11,7 @@ import (
 	"json2proxy/internal/config"
 	"json2proxy/internal/engine"
 	"json2proxy/internal/router"
+	"json2proxy/internal/stats"
 	"json2proxy/internal/tun"
 )
 
@@ -44,11 +45,14 @@ var tunnelPrefixes = []netip.Prefix{
 // engineConfig is the JSON accepted by StartEngine:
 //
 //	{"client": {...client.json...}, "mode": "global", "rules": "",
-//	 "doh": "", "bootstrap": "", "mtu": 1500, "memory_limit_mb": 0}
+//	 "doh": "", "bootstrap": "", "mtu": 1500, "memory_limit_mb": 0,
+//	 "totals_file": ""}
 //
 // Empty fields take their defaults; "rules" is only used with mode "custom".
 // memory_limit_mb sets the Go soft memory limit, which keeps the iOS packet
 // tunnel extension under its memory cap; 0 leaves the runtime default.
+// totals_file keeps the upload and download totals across engine runs; empty
+// keeps none.
 type engineConfig struct {
 	Client        config.Client `json:"client"`
 	Mode          string        `json:"mode"`
@@ -57,29 +61,46 @@ type engineConfig struct {
 	Bootstrap     string        `json:"bootstrap"`
 	MTU           int           `json:"mtu"`
 	MemoryLimitMB int           `json:"memory_limit_mb"`
+	TotalsFile    string        `json:"totals_file"`
+}
+
+// hostOptions are the engine settings that belong to the hosting process
+// rather than to the engine itself.
+type hostOptions struct {
+	memoryLimit int64 // bytes; 0 leaves the runtime default
+	totalsFile  string
 }
 
 var (
 	engineMu sync.Mutex
 	running  *engine.Engine
+	totals   *totalsRecorder
 )
+
+// statsReply is the JSON returned by Stats: the engine snapshot plus the
+// totals of every run.
+type statsReply struct {
+	stats.Snapshot
+	TotalUp   int64 `json:"total_up"`
+	TotalDown int64 `json:"total_down"`
+}
 
 // StartEngine starts the network engine on a TUN file descriptor, which it
 // takes ownership of. Only one engine runs at a time.
 func StartEngine(tunFd int, configJSON string) error {
-	cfg, limit, err := parseEngineConfig(configJSON)
+	cfg, host, err := parseEngineConfig(configJSON)
 	if err != nil {
 		// StartEngine owns tunFd even when it fails.
 		_ = tun.NewFDDevice(tunFd).Close()
 		return err
 	}
-	if limit > 0 {
-		debug.SetMemoryLimit(limit)
+	if host.memoryLimit > 0 {
+		debug.SetMemoryLimit(host.memoryLimit)
 	}
-	return startEngine(tun.NewFDDevice(tunFd), cfg)
+	return startEngine(tun.NewFDDevice(tunFd), cfg, host.totalsFile)
 }
 
-func startEngine(dev tun.Device, cfg engine.Config) error {
+func startEngine(dev tun.Device, cfg engine.Config, totalsFile string) error {
 	engineMu.Lock()
 	defer engineMu.Unlock()
 	if running != nil {
@@ -98,17 +119,22 @@ func startEngine(dev tun.Device, cfg engine.Config) error {
 		return err
 	}
 	running = e
+	totals = startTotals(totalsFile, func() trafficTotals {
+		s := e.Stats(false)
+		return trafficTotals{Up: s.Up, Down: s.Down}
+	})
 	return nil
 }
 
 // StopEngine stops the running engine, if any.
 func StopEngine() {
 	engineMu.Lock()
-	e := running
-	running = nil
+	e, t := running, totals
+	running, totals = nil, nil
 	engineMu.Unlock()
 	if e != nil {
 		_ = e.Close()
+		t.close()
 	}
 }
 
@@ -124,12 +150,13 @@ func EngineRunning() bool {
 // results and recent flows; the summary is enough for a once-per-second poll.
 func Stats(detail bool) string {
 	engineMu.Lock()
-	e := running
+	e, t := running, totals
 	engineMu.Unlock()
 	if e == nil {
 		return ""
 	}
-	data, err := json.Marshal(e.Stats(detail))
+	sum := t.current()
+	data, err := json.Marshal(statsReply{Snapshot: e.Stats(detail), TotalUp: sum.Up, TotalDown: sum.Down})
 	if err != nil {
 		return ""
 	}
@@ -146,15 +173,15 @@ func NetworkChanged() {
 	}
 }
 
-// parseEngineConfig returns the engine configuration and the requested
-// memory limit in bytes (0 when unset).
-func parseEngineConfig(configJSON string) (engine.Config, int64, error) {
+// parseEngineConfig returns the engine configuration and the settings of
+// the hosting process.
+func parseEngineConfig(configJSON string) (engine.Config, hostOptions, error) {
 	var raw engineConfig
 	if err := json.Unmarshal([]byte(configJSON), &raw); err != nil {
-		return engine.Config{}, 0, fmt.Errorf("parse engine config: %w", err)
+		return engine.Config{}, hostOptions{}, fmt.Errorf("parse engine config: %w", err)
 	}
 	if raw.MemoryLimitMB < 0 {
-		return engine.Config{}, 0, errors.New("memory_limit_mb must not be negative")
+		return engine.Config{}, hostOptions{}, errors.New("memory_limit_mb must not be negative")
 	}
 	if raw.Mode == "" {
 		raw.Mode = ModeGlobal
@@ -167,7 +194,7 @@ func parseEngineConfig(configJSON string) (engine.Config, int64, error) {
 		rules, err = router.ModeRules(router.Mode(raw.Mode))
 	}
 	if err != nil {
-		return engine.Config{}, 0, err
+		return engine.Config{}, hostOptions{}, err
 	}
 	if raw.DoH == "" {
 		raw.DoH = DefaultDoH(raw.Mode)
@@ -178,5 +205,5 @@ func parseEngineConfig(configJSON string) (engine.Config, int64, error) {
 	return engine.Config{
 		Client: raw.Client, Rules: rules, DoHURL: raw.DoH, Bootstrap: raw.Bootstrap, MTU: raw.MTU,
 		TunnelPrefixes: tunnelPrefixes,
-	}, int64(raw.MemoryLimitMB) << 20, nil
+	}, hostOptions{memoryLimit: int64(raw.MemoryLimitMB) << 20, totalsFile: raw.TotalsFile}, nil
 }

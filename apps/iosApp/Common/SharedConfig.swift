@@ -21,6 +21,13 @@ enum SharedConfig {
     /// Go heap limit for the extension; iOS stops packet tunnels near 50 MB.
     static let extensionMemoryLimitMB: Int32 = 40
 
+    /// File in the App Group container where the extension's engine keeps
+    /// the traffic totals across runs; empty when the container is missing.
+    static var trafficTotalsPath: String {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?
+            .appendingPathComponent("traffic-totals.json").path ?? ""
+    }
+
     static var groupDefaults: UserDefaults {
         UserDefaults(suiteName: appGroup) ?? .standard
     }

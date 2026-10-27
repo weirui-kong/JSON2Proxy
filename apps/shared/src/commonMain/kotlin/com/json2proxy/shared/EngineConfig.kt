@@ -10,9 +10,16 @@ object EngineConfig {
 
     /**
      * Empty DoH and bootstrap values are sent as-is so the Go core applies
-     * its per-mode defaults. [memoryLimitMb] caps the Go heap (iOS extension).
+     * its per-mode defaults. [memoryLimitMb] caps the Go heap (iOS extension);
+     * [totalsFile] is where the engine keeps the traffic totals across runs.
      */
-    fun build(profile: ServerProfile, secret: String, settings: AppSettings, memoryLimitMb: Int = 0): String =
+    fun build(
+        profile: ServerProfile,
+        secret: String,
+        settings: AppSettings,
+        memoryLimitMb: Int = 0,
+        totalsFile: String = "",
+    ): String =
         buildJsonObject {
             putJsonObject("client") {
                 put("server", profile.server.trim())
@@ -31,5 +38,6 @@ object EngineConfig {
             put("bootstrap", settings.activeOptions.bootstrap.trim())
             put("mtu", MTU)
             if (memoryLimitMb > 0) put("memory_limit_mb", memoryLimitMb)
+            if (totalsFile.isNotEmpty()) put("totals_file", totalsFile)
         }.toString()
 }

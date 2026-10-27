@@ -109,6 +109,8 @@ enum Glyph {
     static let stateFailed = "failed"
     static let tcp = "TCP"
     static let udp = "UDP"
+    static let memory = "mem"
+    static let footerSeparator = " · "
 
     static func connect(_ label: String) -> String { "> \(label)_" }
     static func disconnect(_ label: String) -> String { "[ \(label) ]" }

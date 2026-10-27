@@ -32,7 +32,8 @@ final class AppModel: ObservableObject {
             secrets: KeychainSecretStore(),
             core: GoCoreBridge(),
             backend: backend,
-            memoryLimitMb: SharedConfig.extensionMemoryLimitMB
+            memoryLimitMb: SharedConfig.extensionMemoryLimitMB,
+            totalsFile: SharedConfig.trafficTotalsPath
         )
         self.graph = graph
         self.backend = backend

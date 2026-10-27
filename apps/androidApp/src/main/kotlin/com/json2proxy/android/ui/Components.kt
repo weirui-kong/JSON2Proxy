@@ -8,6 +8,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -93,18 +97,28 @@ private val FieldShape = RoundedCornerShape(6.dp)
 /**
  * A full page: system bar insets, the header, then scrolling content. When the
  * content is shorter than the screen, [bottom] sits at the bottom edge.
+ *
+ * [footer] is not part of the page: it follows the screen-high content, so it
+ * only shows once scrolled to. Unlike the iOS home indicator area, the
+ * navigation bar inset has no room for it (buttons, or a centered handle).
  */
 @Composable
 internal fun TerminalPage(
     header: @Composable () -> Unit,
     scroll: ScrollState = rememberScrollState(),
     bottom: (@Composable ColumnScope.() -> Unit)? = null,
+    footer: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val density = LocalDensity.current
+    val navigationInset = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(Colors.canvas).windowInsetsPadding(WindowInsets.systemBars),
+        Modifier
+            .fillMaxSize()
+            .background(Colors.canvas)
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
     ) {
-        val viewport = maxHeight
+        val viewport = maxHeight - navigationInset
         Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
             Column(
                 modifier = Modifier.fillMaxWidth().heightIn(min = viewport).padding(horizontal = 20.dp, vertical = 16.dp),
@@ -118,6 +132,12 @@ internal fun TerminalPage(
                     Column(Modifier.fillMaxWidth().padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = bottom)
                 }
             }
+            if (footer != null) {
+                Box(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
+                    footer()
+                }
+            }
+            Spacer(Modifier.height(navigationInset))
         }
     }
 }

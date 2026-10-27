@@ -62,6 +62,8 @@ struct ContentView: View {
                     }
                 }
                 .buttonStyle(.plain)
+            } footer: {
+                SystemFooter(memory: model.traffic?.memory)
             }
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -191,10 +193,87 @@ private struct TrafficPanel: View {
                     StatCell(glyph: nil, label: Glyph.udp, value: String(traffic.udpConnections), color: Colors.textPrimary)
                 }
             }
+            TotalLine(traffic: traffic, unit: unit)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, 14)
         .padding(.top, 12)
         .padding(.bottom, 14)
+    }
+}
+
+/// Upload and download of every connection so far, at the panel's bottom right.
+private struct TotalLine: View {
+    let traffic: TrafficStats
+    let unit: TrafficUnit
+
+    var body: some View {
+        let download = TrafficFormat.shared.amount(bytes: traffic.cumulativeDownload, unit: unit)
+        let upload = TrafficFormat.shared.amount(bytes: traffic.cumulativeUpload, unit: unit)
+        (Text("Total").foregroundColor(Colors.textSecondary)
+            + Text(verbatim: " \(Glyph.download) ").foregroundColor(Colors.syntaxKey)
+            + Text(verbatim: download).foregroundColor(Colors.textPrimary)
+            + Text(verbatim: Glyph.footerSeparator).foregroundColor(Colors.textSecondary)
+            + Text(verbatim: "\(Glyph.upload) ").foregroundColor(Colors.syntaxNumber)
+            + Text(verbatim: upload).foregroundColor(Colors.textPrimary))
+            .font(Typo.caption)
+            .lineLimit(1)
+            .accessibilityElement()
+            .accessibilityLabel(Text("Total downloaded \(download), uploaded \(upload)"))
+    }
+}
+
+/// One line under the page: the tunnel extension's memory while connected,
+/// then the iOS version, device model and app version.
+private struct SystemFooter: View {
+    let memory: MemoryUsage?
+
+    var body: some View {
+        let system = Text(verbatim: Self.systemLine).foregroundColor(Colors.textSecondary)
+        Group {
+            if let memory {
+                let used = TrafficFormat.shared.amount(bytes: memory.usedBytes, unit: .bytes)
+                let limit = memory.limitBytes.map { TrafficFormat.shared.amount(bytes: $0.int64Value, unit: .bytes) }
+                let value = limit.map { "\(used) / \($0)" } ?? used
+                (Text(verbatim: "\(Glyph.memory) ").foregroundColor(Colors.textSecondary)
+                    + Text(verbatim: value).foregroundColor(memory.pressure.color)
+                    + Text(verbatim: Glyph.footerSeparator).foregroundColor(Colors.textSecondary)
+                    + system)
+                    .accessibilityElement()
+                    .accessibilityLabel(Text(limit.map { "Network extension memory \(used) of \($0)" } ?? "Network extension memory \(used)")
+                        + Text(verbatim: ", \(Self.systemLine)"))
+            } else {
+                system
+            }
+        }
+        .font(Typo.caption)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+    }
+
+    private static let systemLine: String = {
+        let device = UIDevice.current
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        return ["\(device.systemName) \(device.systemVersion)", modelIdentifier, "v\(version)"]
+            .joined(separator: Glyph.footerSeparator)
+    }()
+
+    /// "iPhone17,3"; the Simulator reports the model it simulates.
+    private static var modelIdentifier: String {
+        if let simulated = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] { return simulated }
+        var system = utsname()
+        uname(&system)
+        return withUnsafeBytes(of: &system.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+    }
+}
+
+private extension MemoryPressure {
+    var color: Color {
+        switch self {
+        case .normal: Colors.textSecondary
+        case .elevated: Colors.warning
+        case .critical: Colors.danger
+        }
     }
 }
 
