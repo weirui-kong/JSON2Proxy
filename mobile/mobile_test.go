@@ -1,0 +1,143 @@
+package mobile
+
+import (
+	"net"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+
+	"golang.org/x/net/dns/dnsmessage"
+)
+
+type fakePlatform struct {
+	mu        sync.Mutex
+	protected int
+	refuse    bool
+	logs      []string
+}
+
+func (f *fakePlatform) Protect(int) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.protected++
+	return !f.refuse
+}
+
+func (f *fakePlatform) Log(_ int, tag, message string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.logs = append(f.logs, tag+": "+message)
+}
+
+func (f *fakePlatform) Notice(string, string) {}
+
+func usePlatform(t *testing.T, p Platform) {
+	SetPlatform(p)
+	t.Cleanup(func() { SetPlatform(nil) })
+}
+
+func listen(t *testing.T) (*net.TCPListener, int) {
+	t.Helper()
+	l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			_ = c.Close()
+		}
+	}()
+	return l, l.Addr().(*net.TCPAddr).Port
+}
+
+// startDNS answers every A query with 127.0.0.1 and AAAA with nothing.
+func startDNS(t *testing.T) string {
+	t.Helper()
+	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	go func() {
+		buf := make([]byte, 1500)
+		for {
+			n, from, err := conn.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			var m dnsmessage.Message
+			if m.Unpack(buf[:n]) != nil {
+				continue
+			}
+			m.Response = true
+			q := m.Questions[0]
+			if q.Type == dnsmessage.TypeA {
+				m.Answers = []dnsmessage.Resource{{
+					Header: dnsmessage.ResourceHeader{Name: q.Name, Type: q.Type, Class: q.Class, TTL: 60},
+					Body:   &dnsmessage.AResource{A: [4]byte{127, 0, 0, 1}},
+				}}
+			}
+			resp, _ := m.Pack()
+			_, _ = conn.WriteTo(resp, from)
+		}
+	}()
+	return conn.LocalAddr().String()
+}
+
+func TestTCPPingThroughBootstrap(t *testing.T) {
+	p := &fakePlatform{}
+	usePlatform(t, p)
+	_, port := listen(t)
+	r := TCPPing(startDNS(t), "server.test", port, 1000, 3)
+	if r.Error != "" || r.Successes != 3 {
+		t.Fatalf("result = %+v", r)
+	}
+	if r.Address != "127.0.0.1:"+strconv.Itoa(port) {
+		t.Fatalf("address = %q", r.Address)
+	}
+	// Bootstrap A and AAAA sockets plus three TCP connections.
+	if p.protected < 5 {
+		t.Fatalf("protected %d sockets, want at least 5", p.protected)
+	}
+}
+
+func TestTCPPingFailures(t *testing.T) {
+	usePlatform(t, &fakePlatform{})
+	l, port := listen(t)
+	_ = l.Close()
+	if r := TCPPing("", "127.0.0.1", port, 500, 2); r.Successes != 0 || r.Error == "" {
+		t.Fatalf("closed port: %+v", r)
+	}
+	if r := TCPPing("", "127.0.0.1", 0, 500, 1); !strings.Contains(r.Error, "invalid port") {
+		t.Fatalf("port 0: %+v", r)
+	}
+	if r := TCPPing("not-an-ip", "server.test", 443, 500, 1); r.Error == "" {
+		t.Fatalf("bad bootstrap: %+v", r)
+	}
+}
+
+func TestTCPPingFailsWhenProtectRefused(t *testing.T) {
+	usePlatform(t, &fakePlatform{refuse: true})
+	_, port := listen(t)
+	if r := TCPPing("", "127.0.0.1", port, 500, 1); r.Successes != 0 || !strings.Contains(r.Error, "protect") {
+		t.Fatalf("result = %+v", r)
+	}
+}
+
+func TestDefaultsAndValidation(t *testing.T) {
+	if DefaultDoH(ModeGlobal) != googleDoH || DefaultDoH(ModeGeoIPCN) != aliDoH {
+		t.Fatal("unexpected default DoH")
+	}
+	if err := ValidateRules("DOMAIN-SUFFIX,cn,DIRECT\nGEOIP,CN,DIRECT\nFINAL,PROXY"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateRules("DOMAIN,a.test,PROXY"); err == nil {
+		t.Fatal("rules without FINAL accepted")
+	}
+}

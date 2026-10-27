@@ -87,7 +87,8 @@ descriptor format and authoring workflow.
 ```text
 apps/          Native client apps (Kotlin Multiplatform), see apps/README.md
 cmd/           Go entry points for json2proxy-client and json2proxy-server
-internal/      Go core: config, protocol, obfs, flow control, SOCKS5
+internal/      Go core: config, protocol, obfs, flow control, SOCKS5, DNS, routing
+mobile/        gomobile API for the native apps (scripts/build-mobile-core.sh)
 integration/   End-to-end Go tests
 configs/       Public configuration templates
 docs/          Protocol and Provider documentation
