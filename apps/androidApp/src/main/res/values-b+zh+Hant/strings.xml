@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 動作 -->
+    <string name="action_back">返回</string>
+    <string name="action_save">儲存</string>
+    <string name="action_add">新增</string>
+    <string name="action_edit">編輯</string>
+    <string name="action_delete">刪除</string>
+    <string name="action_more">更多</string>
+    <string name="action_test_all">全部測速</string>
+    <string name="action_test_latency">測試延遲</string>
+    <string name="action_connect">連線</string>
+    <string name="action_disconnect">中斷連線</string>
+    <string name="action_system_vpn_settings">系統 VPN 設定</string>
+
+    <!-- 連線狀態 -->
+    <string name="state_disconnected">未連線</string>
+    <string name="state_connecting">正在連線到 %1$s…</string>
+    <string name="state_connected">已連線到 %1$s</string>
+    <string name="state_disconnecting">正在中斷連線…</string>
+    <string name="state_failed_no_server">請先選擇伺服器</string>
+    <string name="state_failed_missing_secret">%1$s 沒有儲存密鑰</string>
+    <string name="state_failed_error">連線失敗：%1$s</string>
+
+    <!-- Toast -->
+    <string name="notice_connected">已連線到 %1$s</string>
+    <string name="notice_connection_failed">連線失敗：%1$s</string>
+    <string name="notice_proxy_unavailable">代理無法使用：%1$s</string>
+    <string name="notice_bootstrap_failed">Bootstrap DNS 解析失敗：%1$s</string>
+    <string name="notice_doh_unavailable">DoH 無法使用：%1$s</string>
+    <string name="notice_vpn_permission_denied">未取得 VPN 權限</string>
+    <string name="settings_saved">設定已儲存</string>
+
+    <!-- 首頁 -->
+    <string name="home_server">伺服器</string>
+    <string name="home_add_server">新增伺服器</string>
+    <string name="home_no_server_selected">尚未選擇伺服器</string>
+    <string name="home_settings">設定</string>
+    <string name="home_routing">分流：%1$s</string>
+
+    <!-- 伺服器清單 -->
+    <string name="servers_title">伺服器</string>
+    <string name="servers_empty">尚未新增伺服器</string>
+    <string name="ping_testing">測試中…</string>
+    <string name="ping_ms">%1$d 毫秒</string>
+    <string name="ping_under_1ms">不到 1 毫秒</string>
+    <string name="ping_unreachable">無法連線</string>
+    <string name="ping_invalid_address">位址無效</string>
+
+    <!-- 伺服器編輯 -->
+    <string name="editor_add_title">新增伺服器</string>
+    <string name="editor_edit_title">編輯伺服器</string>
+    <string name="field_name">名稱</string>
+    <string name="field_server">伺服器（host:port）</string>
+    <string name="field_client_id">用戶端 ID</string>
+    <string name="field_secret">密鑰</string>
+    <string name="field_secret_keep">密鑰（留空則不變更）</string>
+    <string name="section_obfuscation">混淆</string>
+    <string name="obfs_none">不使用</string>
+    <string name="field_participation">參與比例（0–1）</string>
+    <string name="section_transport">傳輸</string>
+    <string name="perf_interactive">互動優先</string>
+    <string name="perf_throughput">吞吐量優先</string>
+    <string name="field_udp">UDP</string>
+    <string name="problem_name_required">請輸入名稱</string>
+    <string name="problem_invalid_server">伺服器格式須為 host:port</string>
+    <string name="problem_client_id_required">請輸入用戶端 ID</string>
+    <string name="problem_secret_not_base64url">密鑰須為不含填充的 base64url</string>
+    <string name="problem_secret_too_short">密鑰解碼後至少需要 32 位元組</string>
+    <string name="problem_unknown_obfs">不支援的混淆方式</string>
+    <string name="problem_invalid_participation">參與比例須介於 0 與 1 之間</string>
+    <string name="problem_unknown_performance">不支援的效能模式</string>
+    <string name="secret_store_failed">無法安全地儲存密鑰，伺服器未儲存。</string>
+
+    <!-- 設定 -->
+    <string name="settings_title">設定</string>
+    <string name="section_routing">分流</string>
+    <string name="mode_global">全域代理</string>
+    <string name="mode_geoip_cn">GeoIP CN 直連</string>
+    <string name="mode_custom">匯入規則</string>
+    <string name="mode_global_footnote">所有流量都經由代理。網域名稱不在裝置上解析，直接交給伺服器。</string>
+    <string name="mode_geoip_cn_footnote">位於中國的位址直接連線，其餘流量經由代理。</string>
+    <string name="mode_custom_footnote">每行一條規則，最後一條必須是 FINAL。支援 DOMAIN、DOMAIN-SUFFIX、DOMAIN-KEYWORD、IP-CIDR、IP-CIDR6、GEOIP。</string>
+    <string name="field_rules">規則</string>
+    <string name="rules_invalid">規則無效：%1$s</string>
+    <string name="section_dns">DNS</string>
+    <string name="field_doh">DoH 網址</string>
+    <string name="field_bootstrap">Bootstrap DNS</string>
+    <string name="dns_footnote">DoH 用於分流時解析網域；Bootstrap DNS 只用來解析代理伺服器與 DoH 主機。留空即使用預設值。</string>
+    <string name="section_protection">保護</string>
+    <string name="field_kill_switch">Kill Switch</string>
+    <string name="kill_switch_footnote">代理無法使用時阻擋所有流量。變更會在下次連線時生效。</string>
+    <string name="always_on_footnote">在系統設定中開啟「永久連線的 VPN」與「封鎖未使用 VPN 的連線」，即可自動連線，並在 App 未執行時也阻擋流量。</string>
+
+    <!-- VPN 服務 -->
+    <string name="notification_channel">VPN 狀態</string>
+    <string name="notification_text">VPN 運作中</string>
+    <!-- QR Code 與伺服器連結 -->
+    <string name="action_close">關閉</string>
+    <string name="action_scan">掃描</string>
+    <string name="action_show_qr">顯示 QR Code</string>
+    <string name="action_flashlight">手電筒</string>
+    <string name="action_settings">設定</string>
+    <string name="action_cancel">取消</string>
+    <string name="server_selected">目前選用</string>
+    <string name="scanner_hint">將相機對準 JSON2Proxy 的 QR Code</string>
+    <string name="camera_permission_disabled">相機存取權限已關閉</string>
+    <string name="camera_unavailable">無法使用相機</string>
+    <string name="link_not_server">這不是 JSON2Proxy 的 QR Code 或連結</string>
+    <string name="link_unsupported_version">這個連結需要較新版本的 App</string>
+    <string name="link_missing_credentials">連結缺少用戶端 ID 或密鑰</string>
+    <string name="link_invalid_server">連結中的伺服器位址無效</string>
+    <string name="link_invalid_parameter">連結中有無效的設定值</string>
+    <string name="qr_title">QR Code</string>
+    <string name="qr_content_description">%1$s 的 QR Code</string>
+    <string name="qr_warning">這個 QR Code 含有伺服器密鑰，請只讓你信任的裝置掃描。</string>
+    <string name="import_review">請確認匯入的伺服器設定後再儲存。</string>
+
+</resources>

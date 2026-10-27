@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 
 	"json2proxy/internal/config"
@@ -25,16 +26,19 @@ const ModeCustom = "custom"
 // engineConfig is the JSON accepted by StartEngine:
 //
 //	{"client": {...client.json...}, "mode": "global", "rules": "",
-//	 "doh": "", "bootstrap": "", "mtu": 1500}
+//	 "doh": "", "bootstrap": "", "mtu": 1500, "memory_limit_mb": 0}
 //
 // Empty fields take their defaults; "rules" is only used with mode "custom".
+// memory_limit_mb sets the Go soft memory limit, which keeps the iOS packet
+// tunnel extension under its memory cap; 0 leaves the runtime default.
 type engineConfig struct {
-	Client    config.Client `json:"client"`
-	Mode      string        `json:"mode"`
-	Rules     string        `json:"rules"`
-	DoH       string        `json:"doh"`
-	Bootstrap string        `json:"bootstrap"`
-	MTU       int           `json:"mtu"`
+	Client        config.Client `json:"client"`
+	Mode          string        `json:"mode"`
+	Rules         string        `json:"rules"`
+	DoH           string        `json:"doh"`
+	Bootstrap     string        `json:"bootstrap"`
+	MTU           int           `json:"mtu"`
+	MemoryLimitMB int           `json:"memory_limit_mb"`
 }
 
 var (
@@ -45,9 +49,14 @@ var (
 // StartEngine starts the network engine on a TUN file descriptor, which it
 // takes ownership of. Only one engine runs at a time.
 func StartEngine(tunFd int, configJSON string) error {
-	cfg, err := parseEngineConfig(configJSON)
+	cfg, limit, err := parseEngineConfig(configJSON)
 	if err != nil {
+		// StartEngine owns tunFd even when it fails.
+		_ = tun.NewFDDevice(tunFd).Close()
 		return err
+	}
+	if limit > 0 {
+		debug.SetMemoryLimit(limit)
 	}
 	return startEngine(tun.NewFDDevice(tunFd), cfg)
 }
@@ -102,10 +111,15 @@ func NetworkChanged() {
 	}
 }
 
-func parseEngineConfig(configJSON string) (engine.Config, error) {
+// parseEngineConfig returns the engine configuration and the requested
+// memory limit in bytes (0 when unset).
+func parseEngineConfig(configJSON string) (engine.Config, int64, error) {
 	var raw engineConfig
 	if err := json.Unmarshal([]byte(configJSON), &raw); err != nil {
-		return engine.Config{}, fmt.Errorf("parse engine config: %w", err)
+		return engine.Config{}, 0, fmt.Errorf("parse engine config: %w", err)
+	}
+	if raw.MemoryLimitMB < 0 {
+		return engine.Config{}, 0, errors.New("memory_limit_mb must not be negative")
 	}
 	if raw.Mode == "" {
 		raw.Mode = ModeGlobal
@@ -118,7 +132,7 @@ func parseEngineConfig(configJSON string) (engine.Config, error) {
 		rules, err = router.ModeRules(router.Mode(raw.Mode))
 	}
 	if err != nil {
-		return engine.Config{}, err
+		return engine.Config{}, 0, err
 	}
 	if raw.DoH == "" {
 		raw.DoH = DefaultDoH(raw.Mode)
@@ -128,5 +142,5 @@ func parseEngineConfig(configJSON string) (engine.Config, error) {
 	}
 	return engine.Config{
 		Client: raw.Client, Rules: rules, DoHURL: raw.DoH, Bootstrap: raw.Bootstrap, MTU: raw.MTU,
-	}, nil
+	}, int64(raw.MemoryLimitMB) << 20, nil
 }

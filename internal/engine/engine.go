@@ -29,7 +29,9 @@ const (
 	LogError = 3
 )
 
-// Notice kinds. Each must also be registered in the app notice spec.
+// Notice kinds. Each must also be registered in the app notice spec. The
+// message passed with a notice is a detail for the app to place in its own
+// localized text: the server address for NoticeConnected, the error otherwise.
 const (
 	NoticeConnected        = "connected"
 	NoticeConnectionFailed = "connection_failed"
@@ -145,7 +147,7 @@ func (e *Engine) probe() {
 	switch {
 	case err == nil:
 		e.logf(LogInfo, "server %s reachable", server)
-		e.notice(NoticeConnected, "Connected to "+server)
+		e.notice(NoticeConnected, server)
 	case isBootstrapError(err):
 		e.logf(LogError, "server %s: %v", server, err)
 		e.notice(NoticeBootstrapFailed, err.Error())
@@ -170,11 +172,11 @@ func (e *Engine) proxyResult(err error) {
 	switch {
 	case available:
 		e.logf(LogInfo, "server reachable again")
-		e.notice(NoticeConnected, "Reconnected to "+e.client.Config().Server)
+		e.notice(NoticeConnected, e.client.Config().Server)
 	case isBootstrapError(err):
 		e.notice(NoticeBootstrapFailed, err.Error())
 	default:
-		e.notice(NoticeProxyUnavailable, "Proxy unavailable: "+err.Error())
+		e.notice(NoticeProxyUnavailable, err.Error())
 	}
 }
 
@@ -188,7 +190,7 @@ func (e *Engine) dohHealthChanged(available bool, err error) {
 		e.notice(NoticeBootstrapFailed, err.Error())
 		return
 	}
-	e.notice(NoticeDoHUnavailable, "DoH unavailable: "+err.Error())
+	e.notice(NoticeDoHUnavailable, err.Error())
 }
 
 // target maps a destination back to the domain it was looked up for.

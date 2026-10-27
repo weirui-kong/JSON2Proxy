@@ -1,0 +1,36 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "No tunnel configuration; connect from the app first": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有通道設定，請先從 App 連線"
+          }
+        }
+      }
+    },
+    "The network engine failed to start": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "網路引擎啟動失敗"
+          }
+        }
+      }
+    },
+    "The tunnel interface was not found": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到通道介面"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

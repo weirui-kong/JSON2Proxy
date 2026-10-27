@@ -28,6 +28,8 @@ android {
 
 dependencies {
     implementation(project(":shared"))
+    // Go core built by scripts/build-mobile-core.sh android.
+    implementation(files("../build/json2proxy-core.aar"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -35,5 +37,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    // QR scanning without Google Play services: CameraX preview + ZXing decoding.
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.zxing.core)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

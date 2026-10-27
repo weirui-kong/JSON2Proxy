@@ -2,33 +2,61 @@ package com.json2proxy.shared
 
 enum class NoticeLevel { Info, Error }
 
+/** Why a connection failed; the platform turns it into localized text. */
+enum class FailureReason {
+    NoServerSelected,
+    /** [Notice.detail] is the server name. */
+    MissingSecret,
+    /** [Notice.detail] is the error reported by the system or the Go core. */
+    Error,
+}
+
 /**
  * Events important enough to interrupt the user with a toast. Anything not
  * modelled here, such as a single DNS lookup failing, belongs in [AppLog].
+ * Each type is registered in the app notice spec. [detail] is not
+ * user-facing text: platforms localize by type and insert the detail.
  */
 sealed interface Notice {
     val level: NoticeLevel
-    val message: String
+    val detail: String
 
-    data class Connected(val server: String) : Notice {
+    /**
+     * The server is reachable, at connect time or after an outage. [detail]
+     * is the server name; the engine's address is replaced by [ProxyController].
+     */
+    data class Connected(override val detail: String) : Notice {
         override val level get() = NoticeLevel.Info
-        override val message get() = "Connected to $server"
     }
 
-    data class ConnectionFailed(val server: String, val reason: String) : Notice {
+    data class ConnectionFailed(val reason: FailureReason, override val detail: String) : Notice {
         override val level get() = NoticeLevel.Error
-        override val message get() = "Connection failed: $reason"
+    }
+
+    /** The proxy went from working to failing; traffic is blocked meanwhile. */
+    data class ProxyUnavailable(override val detail: String) : Notice {
+        override val level get() = NoticeLevel.Error
     }
 
     /** Bootstrap DNS could not resolve an infrastructure host (proxy server or DoH). */
-    data class BootstrapFailed(val host: String, val reason: String) : Notice {
+    data class BootstrapFailed(override val detail: String) : Notice {
         override val level get() = NoticeLevel.Error
-        override val message get() = "Bootstrap DNS failed for $host: $reason"
     }
 
     /** The DoH server itself is unreachable, so no domain can be resolved locally. */
-    data class DohUnavailable(val url: String, val reason: String) : Notice {
+    data class DohUnavailable(override val detail: String) : Notice {
         override val level get() = NoticeLevel.Error
-        override val message get() = "DoH unavailable: $reason"
+    }
+
+    companion object {
+        /** Maps a Go core notice kind; unknown kinds return null. */
+        fun fromEngine(kind: String, detail: String): Notice? = when (kind) {
+            "connected" -> Connected(detail)
+            "connection_failed" -> ConnectionFailed(FailureReason.Error, detail)
+            "proxy_unavailable" -> ProxyUnavailable(detail)
+            "bootstrap_failed" -> BootstrapFailed(detail)
+            "doh_unavailable" -> DohUnavailable(detail)
+            else -> null
+        }
     }
 }

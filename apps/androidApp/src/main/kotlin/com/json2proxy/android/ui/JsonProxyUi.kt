@@ -1,0 +1,219 @@
+package com.json2proxy.android.ui
+
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.pm.PackageManager
+import android.net.VpnService
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import com.json2proxy.android.R
+import com.json2proxy.shared.AppGraph
+import com.json2proxy.shared.ConnectionState
+import com.json2proxy.shared.FailureReason
+import com.json2proxy.shared.LinkResult
+import com.json2proxy.shared.Notice
+import com.json2proxy.shared.NoticeLevel
+import com.json2proxy.shared.PingState
+import com.json2proxy.shared.RoutingMode
+import com.json2proxy.shared.ServerLink
+import com.json2proxy.shared.ServerLinks
+import com.json2proxy.shared.ServerProfile
+
+private sealed interface Screen {
+    data object Home : Screen
+    data object Servers : Screen
+    data class Editor(val profileId: String?, val imported: ServerLink? = null) : Screen
+    data object Scanner : Screen
+    data class QrCode(val profile: ServerProfile, val link: String) : Screen
+    data object Settings : Screen
+}
+
+@Composable
+fun JsonProxyUi(graph: AppGraph, incomingLink: String?, onLinkHandled: () -> Unit) {
+    val controller = graph.controller
+    val context = LocalContext.current
+    var stack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
+    val push: (Screen) -> Unit = { stack = stack + it }
+    val pop: () -> Unit = { if (stack.size > 1) stack = stack.dropLast(1) }
+    BackHandler(enabled = stack.size > 1) { pop() }
+
+    // Links opened from other apps, including the system camera, always go to a prefilled editor.
+    LaunchedEffect(incomingLink) {
+        val text = incomingLink ?: return@LaunchedEffect
+        onLinkHandled()
+        when (val result = ServerLinks.parse(text)) {
+            is LinkResult.Success -> push(Screen.Editor(null, result.link))
+            is LinkResult.Failure ->
+                Toast.makeText(context, context.getString(result.problem.textRes()), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    LaunchedEffect(controller) {
+        controller.notices.collect { notice ->
+            val duration = if (notice.level == NoticeLevel.Info) Toast.LENGTH_SHORT else Toast.LENGTH_LONG
+            Toast.makeText(context, notice.text(context), duration).show()
+        }
+    }
+
+    val vpnPermission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            controller.connect()
+        } else {
+            Toast.makeText(context, context.getString(R.string.notice_vpn_permission_denied), Toast.LENGTH_LONG).show()
+        }
+    }
+    // The VPN works without it; the permission only shows the status notification.
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    val connect: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        val consent = VpnService.prepare(context)
+        if (consent != null) vpnPermission.launch(consent) else controller.connect()
+    }
+
+    when (val screen = stack.last()) {
+        Screen.Home -> HomeScreen(
+            graph = graph,
+            onConnect = connect,
+            onServers = { push(Screen.Servers) },
+            onSettings = { push(Screen.Settings) },
+        )
+        Screen.Servers -> ServerListScreen(
+            graph = graph,
+            onBack = pop,
+            onEdit = { push(Screen.Editor(it)) },
+            onScan = { push(Screen.Scanner) },
+            onShowQr = { profile, link -> push(Screen.QrCode(profile, link)) },
+        )
+        is Screen.Editor -> ServerEditorScreen(graph = graph, profileId = screen.profileId, imported = screen.imported, onDone = pop)
+        // The editor replaces the scanner so going back returns to the list.
+        Screen.Scanner -> QrScannerScreen(onClose = pop, onLink = { stack = stack.dropLast(1) + Screen.Editor(null, it) })
+        is Screen.QrCode -> ServerQrScreen(profile = screen.profile, link = screen.link, onBack = pop)
+        Screen.Settings -> SettingsScreen(graph = graph, onBack = pop)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ScreenScaffold(
+    title: String,
+    onBack: (() -> Unit)?,
+    @DrawableRes backIcon: Int = R.drawable.ic_arrow_back,
+    backLabel: Int = R.string.action_back,
+    actions: @Composable RowScope.() -> Unit = {},
+    content: @Composable (PaddingValues) -> Unit,
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    if (onBack != null) ToolbarIcon(backIcon, stringResource(backLabel), onClick = onBack)
+                },
+                actions = actions,
+            )
+        },
+        content = content,
+    )
+}
+
+/** Icon-only toolbar button; the label is read by screen readers and shown on long press. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ToolbarIcon(@DrawableRes icon: Int, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
+        tooltip = { PlainTooltip { Text(label) } },
+        state = rememberTooltipState(),
+    ) {
+        IconButton(onClick = onClick, enabled = enabled) {
+            Icon(painterResource(icon), contentDescription = label)
+        }
+    }
+}
+
+@Composable
+internal fun ConnectionState.label(): String = when (this) {
+    ConnectionState.Disconnected -> stringResource(R.string.state_disconnected)
+    is ConnectionState.Connecting -> stringResource(R.string.state_connecting, server)
+    is ConnectionState.Connected -> stringResource(R.string.state_connected, server)
+    ConnectionState.Disconnecting -> stringResource(R.string.state_disconnecting)
+    is ConnectionState.Failed -> when (reason) {
+        FailureReason.NoServerSelected -> stringResource(R.string.state_failed_no_server)
+        FailureReason.MissingSecret -> stringResource(R.string.state_failed_missing_secret, detail)
+        FailureReason.Error -> stringResource(R.string.state_failed_error, detail)
+    }
+}
+
+internal fun ConnectionState.isActive(): Boolean =
+    this is ConnectionState.Connecting || this is ConnectionState.Connected || this == ConnectionState.Disconnecting
+
+/** Toast text; the Go core and shared code only supply details. */
+internal fun Notice.text(context: Context): String = when (this) {
+    is Notice.Connected -> context.getString(R.string.notice_connected, detail)
+    is Notice.ConnectionFailed -> when (reason) {
+        FailureReason.NoServerSelected -> context.getString(R.string.state_failed_no_server)
+        FailureReason.MissingSecret -> context.getString(R.string.state_failed_missing_secret, detail)
+        FailureReason.Error -> context.getString(R.string.notice_connection_failed, detail)
+    }
+    is Notice.ProxyUnavailable -> context.getString(R.string.notice_proxy_unavailable, detail)
+    is Notice.BootstrapFailed -> context.getString(R.string.notice_bootstrap_failed, detail)
+    is Notice.DohUnavailable -> context.getString(R.string.notice_doh_unavailable, detail)
+}
+
+@Composable
+internal fun PingState.label(): String = when (this) {
+    PingState.Testing -> stringResource(R.string.ping_testing)
+    is PingState.Success ->
+        if (millis < 1) stringResource(R.string.ping_under_1ms) else stringResource(R.string.ping_ms, millis)
+    is PingState.Failed ->
+        if (detail.isEmpty()) stringResource(R.string.ping_invalid_address) else stringResource(R.string.ping_unreachable)
+}
+
+@Composable
+internal fun RoutingMode.title(): String = stringResource(
+    when (this) {
+        RoutingMode.Global -> R.string.mode_global
+        RoutingMode.GeoIpCn -> R.string.mode_geoip_cn
+        RoutingMode.Custom -> R.string.mode_custom
+    },
+)
+
+@Composable
+internal fun RoutingMode.footnote(): String = stringResource(
+    when (this) {
+        RoutingMode.Global -> R.string.mode_global_footnote
+        RoutingMode.GeoIpCn -> R.string.mode_geoip_cn_footnote
+        RoutingMode.Custom -> R.string.mode_custom_footnote
+    },
+)

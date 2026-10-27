@@ -1,40 +1,45 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var model = ConnectionViewModel()
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Server") {
-                    TextField("host:port", text: $model.server)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                }
-
                 Section {
                     Text(model.state.label)
                     if model.state.isActive {
                         Button("Disconnect", role: .destructive, action: model.disconnect)
                     } else {
                         Button("Connect", action: model.connect)
+                            .disabled(model.selectedProfile == nil)
+                    }
+                }
+
+                Section("Server") {
+                    NavigationLink {
+                        ServerListView()
+                    } label: {
+                        if let profile = model.selectedProfile {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(profile.name)
+                                Text(profile.server)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            Text("Add a server")
+                        }
                     }
                 }
 
                 Section {
-                    Text(model.platform)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    NavigationLink("Settings") { SettingsView() }
+                } footer: {
+                    Text("Routing: \(model.settings.routingMode.title) · \(model.platform)")
                 }
             }
             .navigationTitle("JSON2Proxy")
         }
-        .task { await model.observeState() }
-        .task { await model.observeNotices() }
     }
-}
-
-#Preview {
-    ContentView()
 }
