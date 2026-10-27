@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@, routing: %@" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@，分流：%2$@"
+          }
+        }
+      }
+    },
     "%lld ms" : {
       "localizations" : {
         "zh-Hant" : {
@@ -21,9 +31,6 @@
         }
       }
     },
-    "0–1" : {
-
-    },
     "Add" : {
       "localizations" : {
         "zh-Hant" : {
@@ -35,16 +42,6 @@
       }
     },
     "Add a server" : {
-      "localizations" : {
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新增伺服器"
-          }
-        }
-      }
-    },
-    "Add Server" : {
       "localizations" : {
         "zh-Hant" : {
           "stringUnit" : {
@@ -84,12 +81,62 @@
         }
       }
     },
-    "Bits (Kb/s, Mb/s, Gb/s)" : {
+    "Android interface icons" : {
       "localizations" : {
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "位元（Kb/s、Mb/s、Gb/s）"
+            "value" : "Android 介面圖示"
+          }
+        }
+      }
+    },
+    "Android interface, lifecycle and camera" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Android 介面、生命週期與相機"
+          }
+        }
+      }
+    },
+    "Asynchronous work and state updates" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "非同步工作與狀態更新"
+          }
+        }
+      }
+    },
+    "Best" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最低延遲"
+          }
+        }
+      }
+    },
+    "Bits" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "位元"
+          }
+        }
+      }
+    },
+    "Bootstrap DNS" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bootstrap DNS"
           }
         }
       }
@@ -104,12 +151,12 @@
         }
       }
     },
-    "Bytes (KB/s, MB/s, GB/s)" : {
+    "Bytes" : {
       "localizations" : {
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "位元組（KB/s、MB/s、GB/s）"
+            "value" : "位元組"
           }
         }
       }
@@ -244,6 +291,26 @@
         }
       }
     },
+    "Data" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "資料"
+          }
+        }
+      }
+    },
+    "Data structure used by gVisor" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gVisor 使用的資料結構"
+          }
+        }
+      }
+    },
     "Delete" : {
       "localizations" : {
         "zh-Hant" : {
@@ -284,8 +351,16 @@
         }
       }
     },
-    "DNS" : {
-
+    "DNS" : {},
+    "DNS, system calls and mobile bindings" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DNS、系統呼叫與行動平台綁定"
+          }
+        }
+      }
     },
     "DoH resolves domains for routing. Bootstrap DNS only resolves the proxy server and the DoH host. Leave empty for the defaults." : {
       "localizations" : {
@@ -303,6 +378,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "DoH 無法使用：%@"
+          }
+        }
+      }
+    },
+    "DoH URL" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DoH 網址"
           }
         }
       }
@@ -327,6 +412,26 @@
         }
       }
     },
+    "Download %@, upload %@" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下載 %1$@，上傳 %2$@"
+          }
+        }
+      }
+    },
+    "edit" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編輯"
+          }
+        }
+      }
+    },
     "Edit" : {
       "localizations" : {
         "zh-Hant" : {
@@ -337,12 +442,12 @@
         }
       }
     },
-    "Edit Server" : {
+    "Exposes the shared module to Swift" : {
       "localizations" : {
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "編輯伺服器"
+            "value" : "讓 Swift 使用共用模組"
           }
         }
       }
@@ -377,6 +482,26 @@
         }
       }
     },
+    "Fonts" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字體"
+          }
+        }
+      }
+    },
+    "Generating and reading QR codes" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QR Code 的產生與辨識"
+          }
+        }
+      }
+    },
     "GeoIP CN direct" : {
       "localizations" : {
         "zh-Hant" : {
@@ -397,8 +522,25 @@
         }
       }
     },
-    "host:port" : {
-
+    "Hide license text" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隱藏授權全文"
+          }
+        }
+      }
+    },
+    "Icons" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "圖示"
+          }
+        }
+      }
     },
     "Imported rules" : {
       "localizations" : {
@@ -440,8 +582,15 @@
         }
       }
     },
-    "JSON2Proxy" : {
-
+    "JSON for settings and statistics" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定與統計資料的 JSON 處理"
+          }
+        }
+      }
     },
     "JSON2Proxy cannot reach the network. In Settings, allow it to use WLAN and cellular data." : {
       "localizations" : {
@@ -463,12 +612,62 @@
         }
       }
     },
-    "Mode" : {
+    "Language runtime of the shared module" : {
       "localizations" : {
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "模式"
+            "value" : "共用模組的程式語言執行環境"
+          }
+        }
+      }
+    },
+    "Latency is the TCP connect time" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "延遲為 TCP 連線時間"
+          }
+        }
+      }
+    },
+    "Libraries" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "程式庫"
+          }
+        }
+      }
+    },
+    "licenses" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授權"
+          }
+        }
+      }
+    },
+    "Live traffic appears once connected" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連線後顯示即時流量"
+          }
+        }
+      }
+    },
+    "Monospaced typeface of the interface" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "介面的等寬字體"
           }
         }
       }
@@ -499,6 +698,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "網路存取已關閉"
+          }
+        }
+      }
+    },
+    "new" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新增"
           }
         }
       }
@@ -553,12 +762,32 @@
         }
       }
     },
+    "Off" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "關閉"
+          }
+        }
+      }
+    },
     "OK" : {
       "localizations" : {
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "好"
+          }
+        }
+      }
+    },
+    "On" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開啟"
           }
         }
       }
@@ -573,12 +802,22 @@
         }
       }
     },
-    "Participation" : {
+    "Open-source licenses" : {
       "localizations" : {
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "參與比例"
+            "value" : "開放原始碼授權"
+          }
+        }
+      }
+    },
+    "Participation (0–1)" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "參與比例（0–1）"
           }
         }
       }
@@ -589,16 +828,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "參與比例須介於 0 與 1 之間"
-          }
-        }
-      }
-    },
-    "Performance" : {
-      "localizations" : {
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "效能"
           }
         }
       }
@@ -623,16 +852,6 @@
         }
       }
     },
-    "Provider" : {
-      "localizations" : {
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "方式"
-          }
-        }
-      }
-    },
     "Proxy unavailable: %@" : {
       "localizations" : {
         "zh-Hant" : {
@@ -643,8 +862,25 @@
         }
       }
     },
-    "QR Code" : {
-
+    "Public statistics" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公開統計資料"
+          }
+        }
+      }
+    },
+    "qr" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QR Code"
+          }
+        }
+      }
     },
     "QR code for %@" : {
       "localizations" : {
@@ -676,12 +912,22 @@
         }
       }
     },
-    "Routing: %@ · %@" : {
+    "Rules" : {
       "localizations" : {
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "分流：%1$@ · %2$@"
+            "value" : "規則"
+          }
+        }
+      }
+    },
+    "Runtime of the networking core" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網路核心的執行環境"
           }
         }
       }
@@ -756,12 +1002,32 @@
         }
       }
     },
+    "Selected · tap a server to switch" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目前選用 · 點選即切換"
+          }
+        }
+      }
+    },
     "Server" : {
       "localizations" : {
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "伺服器"
+          }
+        }
+      }
+    },
+    "Server (host:port)" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "伺服器（host:port）"
           }
         }
       }
@@ -776,12 +1042,22 @@
         }
       }
     },
-    "Servers" : {
+    "servers" : {
       "localizations" : {
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "伺服器"
+          }
+        }
+      }
+    },
+    "settings" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定"
           }
         }
       }
@@ -806,12 +1082,32 @@
         }
       }
     },
+    "Show license text" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示授權全文"
+          }
+        }
+      }
+    },
     "Show QR Code" : {
       "localizations" : {
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "顯示 QR Code"
+          }
+        }
+      }
+    },
+    "Source of the GeoIP CN address table" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GeoIP CN 位址表的來源"
           }
         }
       }
@@ -826,12 +1122,12 @@
         }
       }
     },
-    "TCP %d · UDP %d" : {
+    "TCP/IP stack inside the VPN tunnel" : {
       "localizations" : {
-        "en" : {
+        "zh-Hant" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "TCP %1$d · UDP %2$d"
+            "state" : "translated",
+            "value" : "VPN 通道內的 TCP/IP 網路堆疊"
           }
         }
       }
@@ -906,6 +1202,16 @@
         }
       }
     },
+    "This app uses the following open-source components and data." : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本 App 使用以下開放原始碼元件與資料。"
+          }
+        }
+      }
+    },
     "This link needs a newer version of the app" : {
       "localizations" : {
         "zh-Hant" : {
@@ -936,12 +1242,32 @@
         }
       }
     },
+    "Total" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "總數"
+          }
+        }
+      }
+    },
     "Traffic units" : {
       "localizations" : {
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "流量單位"
+          }
+        }
+      }
+    },
+    "traffic · 60 s" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "流量 · 60 秒"
           }
         }
       }
@@ -956,9 +1282,7 @@
         }
       }
     },
-    "UDP" : {
-
-    },
+    "UDP" : {},
     "Unknown obfuscation provider" : {
       "localizations" : {
         "zh-Hant" : {

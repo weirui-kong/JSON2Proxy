@@ -4,12 +4,15 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import android.graphics.drawable.ColorDrawable
+import com.json2proxy.android.ui.JsonProxyTheme
 import com.json2proxy.android.ui.JsonProxyUi
+import com.json2proxy.shared.Palette
 
 class MainActivity : ComponentActivity() {
     /** A json2proxy:// link waiting to be imported. */
@@ -17,12 +20,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Dark only: light system bar icons over the canvas color.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
+        window.setBackgroundDrawable(ColorDrawable(Palette.canvas.toInt()))
         // Recreating the activity redelivers the same intent; import it only once.
         if (savedInstanceState == null) incomingLink = intent.newLinkOrNull()
         val graph = (application as JsonProxyApp).graph
         setContent {
-            MaterialTheme {
+            JsonProxyTheme {
                 JsonProxyUi(graph, incomingLink = incomingLink, onLinkHandled = { incomingLink = null })
             }
         }

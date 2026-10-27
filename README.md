@@ -89,6 +89,11 @@ same Go core as the command-line client inside a system VPN (Android
 `VpnService`, iOS Packet Tunnel), so every app on the device is covered without
 configuring a SOCKS5 proxy.
 
+<p align="center">
+  <img src="docs/images/app-home.png" width="300"
+       alt="Home screen of the iOS app while connected: session.json card, one-minute traffic chart and connection counts">
+</p>
+
 - **Servers**: keep several servers, test their TCP latency, and import or share
   them as `json2proxy://` links or QR codes.
 - **Routing**: global proxy, direct connections for addresses in China
@@ -99,7 +104,8 @@ configuring a SOCKS5 proxy.
 - **Protection**: a kill switch blocks proxied traffic instead of falling back
   to direct connections, and flows are closed when the device switches
   networks.
-- **Statistics**: live TCP/UDP connection counts and upload/download speeds.
+- **Statistics**: live TCP/UDP connection counts, upload/download speeds and a
+  one-minute traffic chart.
 
 The interface is available in English and Traditional Chinese. See
 [apps/README.md](apps/README.md) for build instructions.

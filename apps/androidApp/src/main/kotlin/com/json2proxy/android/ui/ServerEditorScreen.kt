@@ -1,29 +1,18 @@
 package com.json2proxy.android.ui
 
 import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -40,7 +29,22 @@ import com.json2proxy.shared.ProfileValidator
 import com.json2proxy.shared.ServerLink
 import com.json2proxy.shared.ServerProfile
 import com.json2proxy.shared.normalizeAscii
+import kotlinx.coroutines.launch
 
+/** Parts of the form that a validation problem points at. */
+private enum class Field { Name, Server, ClientId, Secret, Obfs, Participation, Transport }
+
+private fun ProfileProblem.field(): Field = when (this) {
+    ProfileProblem.NameRequired -> Field.Name
+    ProfileProblem.InvalidServer -> Field.Server
+    ProfileProblem.ClientIdRequired -> Field.ClientId
+    ProfileProblem.SecretNotBase64Url, ProfileProblem.SecretTooShort -> Field.Secret
+    ProfileProblem.UnknownObfsProvider -> Field.Obfs
+    ProfileProblem.InvalidParticipation -> Field.Participation
+    ProfileProblem.UnknownPerformanceMode -> Field.Transport
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun ServerEditorScreen(graph: AppGraph, profileId: String?, imported: ServerLink?, onDone: () -> Unit) {
     val context = LocalContext.current
@@ -56,6 +60,11 @@ internal fun ServerEditorScreen(graph: AppGraph, profileId: String?, imported: S
     var performance by remember { mutableStateOf(initial?.performanceMode ?: PerformanceModes.INTERACTIVE) }
     var udp by remember { mutableStateOf(initial?.udpEnabled ?: true) }
     var problems by remember { mutableStateOf(emptyList<ProfileProblem>()) }
+
+    val scope = rememberCoroutineScope()
+    // Saving with problems brings the first field in error into view.
+    val requesters = remember { Field.entries.associateWith { BringIntoViewRequester() } }
+    fun Modifier.tracked(field: Field) = bringIntoViewRequester(requesters.getValue(field))
 
     val save: () -> Unit = {
         val profile = ServerProfile(
@@ -77,72 +86,88 @@ internal fun ServerEditorScreen(graph: AppGraph, profileId: String?, imported: S
             } else {
                 Toast.makeText(context, context.getString(R.string.secret_store_failed), Toast.LENGTH_LONG).show()
             }
+        } else {
+            val first = problems.map { it.field() }.minOrNull()
+            if (first != null) scope.launch { requesters.getValue(first).bringIntoView() }
         }
     }
 
-    ScreenScaffold(
-        title = stringResource(if (existing == null) R.string.editor_add_title else R.string.editor_edit_title),
-        onBack = onDone,
-        backIcon = R.drawable.ic_close,
-        backLabel = R.string.action_close,
-        actions = { ToolbarIcon(R.drawable.ic_check, stringResource(R.string.action_save), onClick = save) },
-    ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (imported != null) {
-                Text(
-                    stringResource(R.string.import_review),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(12.dp))
-                        .padding(12.dp),
+    @Composable
+    fun errorFor(field: Field): String? = problems.firstOrNull { it.field() == field }?.text()
+
+    TerminalPage(
+        header = {
+            PageHeader(
+                onBack = onDone,
+                backIcon = if (existing == null) R.drawable.ic_close else R.drawable.ic_arrow_back,
+                backLabel = if (existing == null) R.string.action_close else R.string.action_back,
+                actions = { PrimaryButton(stringResource(R.string.action_save), onClick = save) },
+            ) {
+                PathTitle(
+                    stringResource(R.string.path_servers),
+                    stringResource(if (existing == null) R.string.path_new else R.string.path_edit),
                 )
             }
-            OutlinedTextField(
-                value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.field_name)) },
-                singleLine = true, modifier = Modifier.fillMaxWidth(),
+        },
+    ) {
+        if (imported != null) Banner(BannerKind.Info, stringResource(R.string.import_review))
+
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            TerminalTextField(
+                value = name, onValueChange = { name = it },
+                label = stringResource(R.string.field_name),
+                error = errorFor(Field.Name),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                modifier = Modifier.tracked(Field.Name),
             )
-            OutlinedTextField(
-                value = server, onValueChange = { server = it }, label = { Text(stringResource(R.string.field_server)) },
-                singleLine = true, modifier = Modifier.fillMaxWidth(),
+            TerminalTextField(
+                value = server, onValueChange = { server = it },
+                label = stringResource(R.string.field_server),
+                error = errorFor(Field.Server),
                 keyboardOptions = TechnicalKeyboard.copy(keyboardType = KeyboardType.Uri),
+                modifier = Modifier.tracked(Field.Server),
             )
-            OutlinedTextField(
-                value = clientId, onValueChange = { clientId = it }, label = { Text(stringResource(R.string.field_client_id)) },
-                singleLine = true, modifier = Modifier.fillMaxWidth(),
+            TerminalTextField(
+                value = clientId, onValueChange = { clientId = it },
+                label = stringResource(R.string.field_client_id),
+                error = errorFor(Field.ClientId),
                 keyboardOptions = TechnicalKeyboard,
+                modifier = Modifier.tracked(Field.ClientId),
             )
-            OutlinedTextField(
+            TerminalTextField(
                 value = secret, onValueChange = { secret = it },
-                label = { Text(stringResource(if (existing == null) R.string.field_secret else R.string.field_secret_keep)) },
-                singleLine = true, modifier = Modifier.fillMaxWidth(),
+                label = stringResource(if (existing == null) R.string.field_secret else R.string.field_secret_keep),
+                error = errorFor(Field.Secret),
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = TechnicalKeyboard.copy(keyboardType = KeyboardType.Password),
+                modifier = Modifier.tracked(Field.Secret),
             )
+        }
 
+        Column(Modifier.tracked(Field.Obfs), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SectionTitle(stringResource(R.string.section_obfuscation))
-            Choices(ObfsProviders.all, obfs, label = { obfsLabel(it) }) {
+            SegmentedChoice(ObfsProviders.all, obfs, label = { obfsLabel(it) }) {
                 obfs = it
                 participation = if (it == ObfsProviders.NONE) "0" else ObfsProviders.DEFAULT_PARTICIPATION.toString()
             }
-            OutlinedTextField(
-                value = participation, onValueChange = { participation = it }, label = { Text(stringResource(R.string.field_participation)) },
-                singleLine = true, modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = TechnicalKeyboard.copy(keyboardType = KeyboardType.Decimal),
-            )
-
-            SectionTitle(stringResource(R.string.section_transport))
-            Choices(PerformanceModes.all, performance, label = { performanceLabel(it) }) { performance = it }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.field_udp), modifier = Modifier.weight(1f))
-                Switch(checked = udp, onCheckedChange = { udp = it })
+            errorFor(Field.Obfs)?.let { FieldError(it) }
+            // Participation only matters once a provider is chosen.
+            if (obfs != ObfsProviders.NONE || errorFor(Field.Participation) != null) {
+                TerminalTextField(
+                    value = participation, onValueChange = { participation = it },
+                    label = stringResource(R.string.field_participation),
+                    error = errorFor(Field.Participation),
+                    keyboardOptions = TechnicalKeyboard.copy(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.tracked(Field.Participation),
+                )
             }
+        }
 
-            problems.forEach { Text(it.text(), color = MaterialTheme.colorScheme.error) }
+        Column(Modifier.tracked(Field.Transport), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SectionTitle(stringResource(R.string.section_transport))
+            ChoiceList(PerformanceModes.all, performance, title = { performanceLabel(it) }, detail = { it }) { performance = it }
+            errorFor(Field.Transport)?.let { FieldError(it) }
+            SwitchRow(stringResource(R.string.field_udp), udp) { udp = it }
         }
     }
 }
@@ -153,26 +178,6 @@ internal val TechnicalKeyboard = KeyboardOptions(
     autoCorrectEnabled = false,
     keyboardType = KeyboardType.Ascii,
 )
-
-@Composable
-internal fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-}
-
-@Composable
-internal fun <T> Choices(options: List<T>, selected: T, label: @Composable (T) -> String, onSelect: (T) -> Unit) {
-    Column {
-        options.forEach { option ->
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable { onSelect(option) }.padding(vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(selected = option == selected, onClick = { onSelect(option) })
-                Text(label(option))
-            }
-        }
-    }
-}
 
 /** Provider names are configuration values; only "none" is translated. */
 @Composable

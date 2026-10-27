@@ -1,8 +1,9 @@
 @preconcurrency import AVFoundation
+import Shared
 import UIKit
 
 /// The scanner's verdict on a payload: accept a value, or reject it with a
-/// message shown in the hint pill while scanning continues.
+/// message shown in the hint card while scanning continues.
 enum ScanDecision<Value> {
     case accept(Value)
     case reject(String)
@@ -23,7 +24,8 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
         static let bracketLength: CGFloat = 26
         static let bracketLineWidth: CGFloat = 5
         static let codeHighlightPadding: CGFloat = 10
-        static let glassButtonSide: CGFloat = 44
+        static let buttonSide: CGFloat = 44
+        static let buttonCornerRadius: CGFloat = 8
         static let hintHeight: CGFloat = 44
         static let hintBottomInset: CGFloat = 24
         static let dimAlpha: CGFloat = 0.35
@@ -47,20 +49,23 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
     private let bracketLayer = CAShapeLayer()
     private var viewfinderRect: CGRect = .zero
 
-    private lazy var closeButton = makeGlassButton(
+    private lazy var closeButton = makeSquareButton(
         systemImageName: "xmark", label: String(localized: "Close"), action: #selector(closeTapped)
     )
-    private lazy var torchButton = makeGlassButton(
+    private lazy var torchButton = makeSquareButton(
         systemImageName: "flashlight.off.fill", label: String(localized: "Flashlight"), action: #selector(torchTapped)
     )
-    private lazy var hintView = makeGlassView(cornerRadius: Layout.hintHeight / 2, isInteractive: false)
+    private let hintView = UIView()
 
-    private let hintIcon = UIImageView(image: UIImage(systemName: "qrcode.viewfinder"))
+    /// The terminal prompt before the hint; replaced by a warning icon while showing a rejection.
+    private let hintIcon = UIImageView()
 
     private let hintLabel: UILabel = {
         let label = UILabel()
-        label.font = .preferredFont(forTextStyle: .subheadline)
-        label.textColor = .white
+        label.font = Mono.uiFont(Mono.regular, size: 13, style: .subheadline)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = UIColor(argb: Palette.shared.textPrimary)
+        label.numberOfLines = 2
         label.lineBreakMode = .byTruncatingMiddle
         return label
     }()
@@ -95,7 +100,7 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .black
+        view.backgroundColor = UIColor(argb: Palette.shared.canvas)
         setupOverlay()
     }
 
@@ -211,24 +216,28 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
 
     private func setupOverlay() {
         dimLayer.fillRule = .evenOdd
+        // Dims the camera picture itself, so it stays black rather than a palette color.
         dimLayer.fillColor = UIColor.black.withAlphaComponent(Layout.dimAlpha).cgColor
         view.layer.addSublayer(dimLayer)
 
-        bracketLayer.strokeColor = UIColor.white.cgColor
+        bracketLayer.strokeColor = UIColor(argb: Palette.shared.accent).cgColor
         bracketLayer.fillColor = UIColor.clear.cgColor
         bracketLayer.lineWidth = Layout.bracketLineWidth
         bracketLayer.lineCap = .round
         bracketLayer.lineJoin = .round
         view.layer.addSublayer(bracketLayer)
 
-        hintIcon.tintColor = .white
+        showHint()
         hintIcon.setContentHuggingPriority(.required, for: .horizontal)
-        hintLabel.text = hint
+        hintIcon.contentMode = .center
+        hintView.layer.cornerRadius = Layout.buttonCornerRadius
+        hintView.layer.cornerCurve = .continuous
+        hintView.layer.borderWidth = 1
         let hintStack = UIStackView(arrangedSubviews: [hintIcon, hintLabel])
         hintStack.spacing = 8
         hintStack.alignment = .center
         hintStack.translatesAutoresizingMaskIntoConstraints = false
-        hintView.contentView.addSubview(hintStack)
+        hintView.addSubview(hintStack)
 
         [closeButton, torchButton, hintView].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -236,25 +245,25 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
         }
         let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            hintStack.leadingAnchor.constraint(equalTo: hintView.contentView.leadingAnchor, constant: 16),
-            hintStack.trailingAnchor.constraint(equalTo: hintView.contentView.trailingAnchor, constant: -18),
-            hintStack.topAnchor.constraint(equalTo: hintView.contentView.topAnchor),
-            hintStack.bottomAnchor.constraint(equalTo: hintView.contentView.bottomAnchor),
+            hintStack.leadingAnchor.constraint(equalTo: hintView.leadingAnchor, constant: 14),
+            hintStack.trailingAnchor.constraint(equalTo: hintView.trailingAnchor, constant: -14),
+            hintStack.topAnchor.constraint(equalTo: hintView.topAnchor, constant: 12),
+            hintStack.bottomAnchor.constraint(equalTo: hintView.bottomAnchor, constant: -12),
 
             closeButton.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 16),
             closeButton.topAnchor.constraint(equalTo: guide.topAnchor, constant: 8),
-            closeButton.widthAnchor.constraint(equalToConstant: Layout.glassButtonSide),
-            closeButton.heightAnchor.constraint(equalToConstant: Layout.glassButtonSide),
+            closeButton.widthAnchor.constraint(equalToConstant: Layout.buttonSide),
+            closeButton.heightAnchor.constraint(equalToConstant: Layout.buttonSide),
 
             torchButton.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
             torchButton.topAnchor.constraint(equalTo: closeButton.topAnchor),
             torchButton.widthAnchor.constraint(equalTo: closeButton.widthAnchor),
             torchButton.heightAnchor.constraint(equalTo: closeButton.heightAnchor),
 
-            hintView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            hintView.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
+            hintView.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
+            hintView.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
             hintView.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -Layout.hintBottomInset),
-            hintView.heightAnchor.constraint(equalToConstant: Layout.hintHeight),
+            hintView.heightAnchor.constraint(greaterThanOrEqualToConstant: Layout.hintHeight),
         ])
         torchButton.isHidden = true
     }
@@ -300,7 +309,7 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
         animation.damping = 18
         animation.duration = animation.settlingDuration
         bracketLayer.path = newPath
-        bracketLayer.strokeColor = UIColor.systemYellow.cgColor
+        bracketLayer.strokeColor = UIColor(argb: Palette.shared.accent).cgColor
         bracketLayer.add(animation, forKey: "snap")
     }
 
@@ -327,51 +336,52 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
     private func showRejection(_ message: String) {
         hintResetWorkItem?.cancel()
         hintIcon.image = UIImage(systemName: "exclamationmark.triangle.fill")
-        hintIcon.tintColor = .systemYellow
+        hintIcon.tintColor = UIColor(argb: Palette.shared.dangerText)
         hintLabel.text = message
+        hintLabel.textColor = UIColor(argb: Palette.shared.dangerText)
+        hintView.backgroundColor = UIColor(argb: Palette.shared.dangerBackground)
+        hintView.layer.borderColor = UIColor(argb: Palette.shared.danger).cgColor
+        bracketLayer.strokeColor = UIColor(argb: Palette.shared.danger).cgColor
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            self.hintIcon.image = UIImage(systemName: "qrcode.viewfinder")
-            self.hintIcon.tintColor = .white
-            self.hintLabel.text = self.hint
+            self.showHint()
             self.lastRejectedPayload = nil
         }
         hintResetWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Layout.hintResetDelay, execute: work)
     }
 
-    // Liquid Glass on iOS 26+, system material blur below.
-    private func makeGlassView(cornerRadius: CGFloat, isInteractive: Bool) -> UIVisualEffectView {
-        let effectView: UIVisualEffectView
-        if #available(iOS 26.0, *) {
-            let glass = UIGlassEffect()
-            glass.isInteractive = isInteractive
-            effectView = UIVisualEffectView(effect: glass)
-        } else {
-            effectView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
-        }
-        effectView.layer.cornerRadius = cornerRadius
-        effectView.layer.cornerCurve = .continuous
-        effectView.clipsToBounds = true
-        return effectView
+    /// The terminal hint card: `>` then the instruction.
+    private func showHint() {
+        hintIcon.image = Self.promptImage
+        hintIcon.tintColor = UIColor(argb: Palette.shared.accent)
+        hintLabel.text = hint
+        hintLabel.textColor = UIColor(argb: Palette.shared.textPrimary)
+        hintView.backgroundColor = UIColor(argb: Palette.shared.surface)
+        hintView.layer.borderColor = UIColor(argb: Palette.shared.border).cgColor
+        if !isHandled { bracketLayer.strokeColor = UIColor(argb: Palette.shared.accent).cgColor }
     }
 
-    private func makeGlassButton(systemImageName: String, label: String, action: Selector) -> UIVisualEffectView {
-        let effectView = makeGlassView(cornerRadius: Layout.glassButtonSide / 2, isInteractive: true)
+    /// `>` drawn as an image so it sits in the icon slot; decorative.
+    private static let promptImage: UIImage = {
+        let font = Mono.uiFont(Mono.bold, size: 15, style: .body)
+        let text = NSAttributedString(string: ">", attributes: [.font: font])
+        let size = text.size()
+        return UIGraphicsImageRenderer(size: size).image { _ in text.draw(at: .zero) }.withRenderingMode(.alwaysTemplate)
+    }()
+
+    private func makeSquareButton(systemImageName: String, label: String, action: Selector) -> UIButton {
         let button = UIButton(type: .system)
-        button.setImage(UIImage(systemName: systemImageName, withConfiguration: UIImage.SymbolConfiguration(textStyle: .body, scale: .large)), for: .normal)
-        button.tintColor = .white
+        button.setImage(UIImage(systemName: systemImageName, withConfiguration: UIImage.SymbolConfiguration(textStyle: .body, scale: .medium)), for: .normal)
+        button.tintColor = UIColor(argb: Palette.shared.textPrimary)
+        button.backgroundColor = UIColor(argb: Palette.shared.surface)
+        button.layer.cornerRadius = Layout.buttonCornerRadius
+        button.layer.cornerCurve = .continuous
+        button.layer.borderWidth = 1
+        button.layer.borderColor = UIColor(argb: Palette.shared.border).cgColor
         button.accessibilityLabel = label
         button.addTarget(self, action: action, for: .touchUpInside)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        effectView.contentView.addSubview(button)
-        NSLayoutConstraint.activate([
-            button.leadingAnchor.constraint(equalTo: effectView.contentView.leadingAnchor),
-            button.trailingAnchor.constraint(equalTo: effectView.contentView.trailingAnchor),
-            button.topAnchor.constraint(equalTo: effectView.contentView.topAnchor),
-            button.bottomAnchor.constraint(equalTo: effectView.contentView.bottomAnchor),
-        ])
-        return effectView
+        return button
     }
 
     private func showPermissionDenied() {
@@ -409,6 +419,6 @@ final class QRCodeScannerViewController: UIViewController, @preconcurrency AVCap
         device.torchMode = isOn ? .on : .off
         device.unlockForConfiguration()
         sender.setImage(UIImage(systemName: isOn ? "flashlight.on.fill" : "flashlight.off.fill", withConfiguration: UIImage.SymbolConfiguration(textStyle: .body, scale: .large)), for: .normal)
-        sender.tintColor = isOn ? .systemYellow : .white
+        sender.tintColor = UIColor(argb: isOn ? Palette.shared.warning : Palette.shared.textPrimary)
     }
 }

@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -65,11 +66,26 @@ class ProxyController(
      * connected and while someone collects this flow; null otherwise.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val traffic: StateFlow<TrafficStats?> = state
+    private val trafficFeed: StateFlow<TrafficFeed> = state
         .map { it is ConnectionState.Connected }
         .distinctUntilChanged()
-        .flatMapLatest { connected -> if (connected) sampleTraffic(detail = false) else flowOf(null) }
-        .stateIn(scope, SharingStarted.WhileSubscribed(STATS_STOP_DELAY_MS), null)
+        .flatMapLatest { connected ->
+            if (connected) sampleTraffic(detail = false).runningFold(TrafficFeed.Empty, TrafficFeed::next)
+            else flowOf(TrafficFeed.Empty)
+        }
+        .stateIn(scope, SharingStarted.WhileSubscribed(STATS_STOP_DELAY_MS), TrafficFeed.Empty)
+
+    val traffic: StateFlow<TrafficStats?> = trafficFeed
+        .map { it.latest }
+        .stateIn(scope, SharingStarted.WhileSubscribed(), null)
+
+    /**
+     * Speeds of the last minute of samples, oldest first, for the home chart.
+     * Starts empty whenever sampling starts, so it is cleared on disconnect.
+     */
+    val trafficHistory: StateFlow<List<TrafficPoint>> = trafficFeed
+        .map { it.history }
+        .stateIn(scope, SharingStarted.WhileSubscribed(), emptyList())
 
     val platform: String = platformName()
 

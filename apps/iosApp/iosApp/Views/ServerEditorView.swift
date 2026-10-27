@@ -32,55 +32,93 @@ struct ServerEditorView: View {
         _udpEnabled = State(initialValue: profile?.udpEnabled ?? true)
     }
 
+    /// Parts of the form that a validation problem points at, in form order.
+    private enum Field: Int, Comparable {
+        case name, server, clientId, secret, obfs, participation, transport
+
+        static func < (lhs: Field, rhs: Field) -> Bool { lhs.rawValue < rhs.rawValue }
+    }
+
+    private func field(of problem: ProfileProblem) -> Field {
+        switch problem {
+        case .nameRequired: .name
+        case .invalidServer: .server
+        case .clientIdRequired: .clientId
+        case .secretNotBase64Url, .secretTooShort: .secret
+        case .unknownObfsProvider: .obfs
+        case .invalidParticipation: .participation
+        case .unknownPerformanceMode: .transport
+        }
+    }
+
+    private func error(_ field: Field) -> String? {
+        problems.first { self.field(of: $0) == field }?.localizedText
+    }
+
     var body: some View {
-        Form {
-            if isImport {
-                Section {
-                    Label("Review the imported server, then save.", systemImage: "qrcode")
-                        .foregroundStyle(.secondary)
+        ScrollViewReader { reader in
+            TerminalPage {
+                PathTitle(String(localized: "servers"), existing == nil ? String(localized: "new") : String(localized: "edit"))
+                if isImport {
+                    Banner(kind: .info, text: String(localized: "Review the imported server, then save."))
                 }
-            }
-            Section("Server") {
-                TextField("Name", text: $name)
-                TextField("host:port", text: $server)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                TextField("Client ID", text: $clientId)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                SecureField(existing == nil ? "Secret" : "Secret (leave empty to keep)", text: $secret)
-            }
 
-            Section("Obfuscation") {
-                Picker("Provider", selection: $obfsProvider) {
-                    ForEach(ObfsProviders.shared.all, id: \.self) { Text(obfsLabel($0)).tag($0) }
+                VStack(alignment: .leading, spacing: 14) {
+                    TerminalField(label: String(localized: "Name"), error: error(.name)) {
+                        TextField(text: $name) { Text("Name") }
+                    }
+                    .id(Field.name)
+                    TerminalField(label: String(localized: "Server (host:port)"), error: error(.server)) {
+                        TextField(text: $server) { Text("Server (host:port)") }
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                    }
+                    .id(Field.server)
+                    TerminalField(label: String(localized: "Client ID"), error: error(.clientId)) {
+                        TextField(text: $clientId) { Text("Client ID") }
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                    .id(Field.clientId)
+                    let secretLabel = existing == nil ? String(localized: "Secret") : String(localized: "Secret (leave empty to keep)")
+                    TerminalField(label: secretLabel, error: error(.secret)) {
+                        // The label sits above the field; an empty prompt keeps it from repeating inside.
+                        SecureField(text: $secret, prompt: Text(verbatim: "")) { Text(secretLabel) }
+                    }
+                    .id(Field.secret)
                 }
-                .onChange(of: obfsProvider) { provider in
-                    participation = provider == ObfsProviders.shared.NONE
-                        ? "0" : String(ObfsProviders.shared.DEFAULT_PARTICIPATION)
-                }
-                LabeledContent("Participation") {
-                    TextField("0–1", text: $participation)
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                }
-            }
 
-            Section("Transport") {
-                Picker("Performance", selection: $performanceMode) {
-                    ForEach(PerformanceModes.shared.all, id: \.self) { Text(performanceLabel($0)).tag($0) }
+                TerminalSection(title: String(localized: "Obfuscation")) {
+                    SegmentedChoice(options: ObfsProviders.shared.all, selection: $obfsProvider, label: obfsLabel)
+                        .onChange(of: obfsProvider) { provider in
+                            participation = provider == ObfsProviders.shared.NONE
+                                ? "0" : String(ObfsProviders.shared.DEFAULT_PARTICIPATION)
+                        }
+                    if let message = error(.obfs) { FieldError(text: message) }
+                    // Participation only matters once a provider is chosen.
+                    if obfsProvider != ObfsProviders.shared.NONE || error(.participation) != nil {
+                        TerminalField(label: String(localized: "Participation (0–1)"), error: error(.participation)) {
+                            TextField(text: $participation) { Text("Participation (0–1)") }
+                                .keyboardType(.decimalPad)
+                        }
+                        .id(Field.participation)
+                    }
                 }
-                Toggle("UDP", isOn: $udpEnabled)
-            }
+                .id(Field.obfs)
 
-            if !problems.isEmpty {
-                Section {
-                    ForEach(problems, id: \.self) { Text($0.localizedText).foregroundStyle(.red) }
+                TerminalSection(title: String(localized: "Transport")) {
+                    ChoiceList(options: PerformanceModes.shared.all, selection: $performanceMode, title: performanceLabel, detail: { $0 })
+                    if let message = error(.transport) { FieldError(text: message) }
+                    SwitchRow(label: String(localized: "UDP"), isOn: $udpEnabled)
                 }
+                .id(Field.transport)
+            }
+            .onChange(of: problems) { problems in
+                guard let first = problems.map(field(of:)).min() else { return }
+                withAnimation { reader.scrollTo(first, anchor: .top) }
             }
         }
-        .navigationTitle(existing == nil ? "Add Server" : "Edit Server")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -88,8 +126,9 @@ struct ServerEditorView: View {
                     .labelStyle(.iconOnly)
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button(action: save) { Label("Save", systemImage: "checkmark") }
-                    .labelStyle(.iconOnly)
+                Button("Save", action: save)
+                    .font(Typo.bodyBold)
+                    .foregroundStyle(Colors.accent)
             }
         }
     }

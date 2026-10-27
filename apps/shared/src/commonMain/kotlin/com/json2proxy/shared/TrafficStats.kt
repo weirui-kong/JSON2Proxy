@@ -34,6 +34,24 @@ data class TrafficStats(
     val flows: List<FlowRecord> = emptyList(),
 )
 
+/** Overall speeds of one sample, for the traffic chart. */
+data class TrafficPoint(val uploadSpeed: Long, val downloadSpeed: Long)
+
+/** The latest sample and the speeds of up to [HISTORY_SIZE] samples before it, oldest first. */
+internal data class TrafficFeed(val latest: TrafficStats?, val history: List<TrafficPoint>) {
+    fun next(stats: TrafficStats?): TrafficFeed {
+        if (stats == null) return copy(latest = null)
+        val point = TrafficPoint(stats.uploadSpeed, stats.downloadSpeed)
+        return TrafficFeed(stats, (history + point).takeLast(HISTORY_SIZE))
+    }
+
+    companion object {
+        /** About a minute at one sample per second. */
+        const val HISTORY_SIZE = 60
+        val Empty = TrafficFeed(null, emptyList())
+    }
+}
+
 /** Traffic to one domain, or to an IP address when no domain is known. */
 data class HostTraffic(
     val host: String,

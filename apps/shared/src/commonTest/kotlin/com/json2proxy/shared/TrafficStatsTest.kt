@@ -75,4 +75,26 @@ class TrafficStatsTest {
         assertEquals("80.0 Mb/s", TrafficFormat.rate(10_000_000, TrafficUnit.Bits))
         assertEquals("1.00 Gb/s", TrafficFormat.rate(125_000_000, TrafficUnit.Bits))
     }
+
+    @Test
+    fun historyKeepsTheLastMinuteInOrder() {
+        var feed = TrafficFeed.Empty
+        repeat(65) { i -> feed = feed.next(stats(up = i.toLong(), down = i * 10L)) }
+        assertEquals(TrafficFeed.HISTORY_SIZE, feed.history.size)
+        assertEquals(TrafficPoint(5, 50), feed.history.first())
+        assertEquals(TrafficPoint(64, 640), feed.history.last())
+        assertEquals(64, feed.latest?.uploadSpeed)
+    }
+
+    @Test
+    fun missingSampleKeepsHistory() {
+        val feed = TrafficFeed.Empty.next(stats(up = 1, down = 2)).next(null)
+        assertNull(feed.latest)
+        assertEquals(listOf(TrafficPoint(1, 2)), feed.history)
+    }
+
+    private fun stats(up: Long, down: Long) = TrafficStats(
+        tcpConnections = 0, udpConnections = 0, uploadTotal = 0, downloadTotal = 0,
+        uploadSpeed = up, downloadSpeed = down,
+    )
 }

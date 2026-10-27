@@ -13,6 +13,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var settings: AppSettings
     /// Connection counts and speeds while connected.
     @Published private(set) var traffic: TrafficStats?
+    /// Speeds of the last minute, oldest first, for the home chart.
+    @Published private(set) var trafficHistory: [TrafficPoint] = []
     /// A server read from a scanned QR code or an opened link, waiting for the user to review it.
     @Published var pendingImport: ImportedServer?
 
@@ -54,6 +56,7 @@ final class AppModel: ObservableObject {
             group.addTask { await self.observeSettings() }
             group.addTask { await self.observeNotices() }
             group.addTask { await self.observeTraffic() }
+            group.addTask { await self.observeTrafficHistory() }
         }
     }
 
@@ -79,6 +82,10 @@ final class AppModel: ObservableObject {
 
     private func observeTraffic() async {
         for await value in graph.controller.traffic { traffic = value }
+    }
+
+    private func observeTrafficHistory() async {
+        for await value in graph.controller.trafficHistory { trafficHistory = value }
     }
 
     private func observeNotices() async {
