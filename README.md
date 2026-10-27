@@ -82,6 +82,28 @@ JSON field names, field order, optional metadata, and bounded maintenance
 messages. See [the Obfs Provider guide](docs/OBFS_PROVIDER.md) for the public
 descriptor format and authoring workflow.
 
+## Mobile apps
+
+`apps/` contains native clients for Android (8.0+) and iOS (16+). They run the
+same Go core as the command-line client inside a system VPN (Android
+`VpnService`, iOS Packet Tunnel), so every app on the device is covered without
+configuring a SOCKS5 proxy.
+
+- **Servers**: keep several servers, test their TCP latency, and import or share
+  them as `json2proxy://` links or QR codes.
+- **Routing**: global proxy, direct connections for addresses in China
+  (GeoIP CN), or imported rules (domain, suffix, keyword, IP range and GeoIP).
+  Domain names are passed to the server unresolved whenever traffic is proxied.
+- **DNS**: DoH for local lookups, with a plain bootstrap DNS server used only for
+  the proxy server and DoH host names; each routing mode keeps its own settings.
+- **Protection**: a kill switch blocks proxied traffic instead of falling back
+  to direct connections, and flows are closed when the device switches
+  networks.
+- **Statistics**: live TCP/UDP connection counts and upload/download speeds.
+
+The interface is available in English and Traditional Chinese. See
+[apps/README.md](apps/README.md) for build instructions.
+
 ## Repository layout
 
 ```text
