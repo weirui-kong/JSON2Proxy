@@ -2,7 +2,11 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"net"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -73,12 +77,122 @@ func TestResolveUDPDelegatesDomainToRemoteOutbound(t *testing.T) {
 			Type: "socks5", Address: "127.0.0.1:1080", DNS: "remote",
 		}},
 	}
-	host, port, target, err := a.resolveUDP("does-not-resolve.invalid", 53, false)
+	targets, err := a.resolveUDP("does-not-resolve.invalid", 53, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if host != "does-not-resolve.invalid" || port != 53 || target != "does-not-resolve.invalid:53" {
-		t.Fatalf("unexpected remote UDP route: %q %d %q", host, port, target)
+	if len(targets) != 1 || targets[0] != (udpTarget{host: "does-not-resolve.invalid", port: 53, key: "does-not-resolve.invalid:53"}) {
+		t.Fatalf("unexpected remote UDP route: %+v", targets)
+	}
+}
+
+func lookupReturning(addresses ...string) func(context.Context, string) ([]net.IP, error) {
+	return func(context.Context, string) ([]net.IP, error) {
+		var ips []net.IP
+		for _, a := range addresses {
+			ips = append(ips, net.ParseIP(a))
+		}
+		return ips, nil
+	}
+}
+
+func targetKeys(targets []udpTarget) string {
+	var keys []string
+	for _, target := range targets {
+		keys = append(keys, target.key)
+	}
+	return strings.Join(keys, " ")
+}
+
+func TestResolveUDPTriesIPv4BeforeIPv6(t *testing.T) {
+	a := &app{
+		dialTimeout: time.Second,
+		// Resolvers on hosts with an IPv6 address usually list AAAA first.
+		udpLookup: lookupReturning("2001:4860:4860::8888", "8.8.8.8", "2001:4860:4860::8844", "8.8.4.4"),
+	}
+	targets, err := a.resolveUDP("dns.google", 53, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "8.8.8.8:53 8.8.4.4:53 [2001:4860:4860::8888]:53 [2001:4860:4860::8844]:53"
+	if got := targetKeys(targets); got != want {
+		t.Fatalf("targets = %s, want %s", got, want)
+	}
+	if targets[0].host != "8.8.8.8" || targets[0].port != 53 {
+		t.Fatalf("first target = %+v", targets[0])
+	}
+}
+
+func TestResolveUDPDropsForbiddenAddresses(t *testing.T) {
+	a := &app{dialTimeout: time.Second, udpLookup: lookupReturning("10.0.0.1", "2001:db8::1", "1.1.1.1")}
+	targets, err := a.resolveUDP("mixed.test", 53, false)
+	if err != nil || targetKeys(targets) != "1.1.1.1:53" {
+		t.Fatalf("targets = %v, err %v", targetKeys(targets), err)
+	}
+	a = &app{dialTimeout: time.Second, udpLookup: lookupReturning("10.0.0.1", "fd00::1")}
+	if _, err := a.resolveUDP("private.test", 53, false); !errors.Is(err, errPrivateTarget) {
+		t.Fatalf("err = %v, want errPrivateTarget", err)
+	}
+	// allow_private keeps private addresses, still IPv4 first.
+	targets, err = a.resolveUDP("private-allowed.test", 53, true)
+	if err != nil || targetKeys(targets) != "10.0.0.1:53 [fd00::1]:53" {
+		t.Fatalf("allow_private targets = %v, err %v", targetKeys(targets), err)
+	}
+}
+
+type recordingEgress struct {
+	fail map[string]bool
+	sent []string
+}
+
+func (e *recordingEgress) WriteDatagram(host string, port uint16, _ []byte) error {
+	key := net.JoinHostPort(host, strconv.Itoa(int(port)))
+	e.sent = append(e.sent, key)
+	if e.fail[key] {
+		return errors.New("network is unreachable")
+	}
+	return nil
+}
+
+func (e *recordingEgress) ReadDatagram(time.Time, []byte) (string, uint16, []byte, error) {
+	return "", 0, nil, errors.New("not implemented")
+}
+
+func (e *recordingEgress) Close() error { return nil }
+
+func TestSendUDPDatagramFallsBackWhenSendFails(t *testing.T) {
+	targets := []udpTarget{
+		{host: "8.8.8.8", port: 53, key: "8.8.8.8:53"},
+		{host: "2001:4860:4860::8888", port: 53, key: "[2001:4860:4860::8888]:53"},
+	}
+	allowAll := func(string) bool { return true }
+
+	// An IPv6-only host fails IPv4 sends right away and uses IPv6.
+	egress := &recordingEgress{fail: map[string]bool{"8.8.8.8:53": true}}
+	key, ok := sendUDPDatagram(egress, targets, []byte("q"), allowAll)
+	if !ok || key != "[2001:4860:4860::8888]:53" || len(egress.sent) != 2 {
+		t.Fatalf("key = %q ok = %v sent = %v", key, ok, egress.sent)
+	}
+
+	// When IPv4 works, IPv6 is never tried.
+	egress = &recordingEgress{}
+	key, ok = sendUDPDatagram(egress, targets, []byte("q"), allowAll)
+	if !ok || key != "8.8.8.8:53" || len(egress.sent) != 1 {
+		t.Fatalf("key = %q ok = %v sent = %v", key, ok, egress.sent)
+	}
+
+	// Every send failing drops the datagram.
+	egress = &recordingEgress{fail: map[string]bool{"8.8.8.8:53": true, "[2001:4860:4860::8888]:53": true}}
+	if _, ok = sendUDPDatagram(egress, targets, []byte("q"), allowAll); ok {
+		t.Fatal("datagram reported sent although every send failed")
+	}
+
+	// A full destination set skips new targets without sending.
+	egress = &recordingEgress{}
+	onlyKnown := func(key string) bool { return key == "[2001:4860:4860::8888]:53" }
+	key, ok = sendUDPDatagram(egress, targets, []byte("q"), onlyKnown)
+	if !ok || key != "[2001:4860:4860::8888]:53" || len(egress.sent) != 1 {
+		t.Fatalf("key = %q ok = %v sent = %v", key, ok, egress.sent)
 	}
 }
 

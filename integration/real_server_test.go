@@ -86,8 +86,8 @@ func TestRealServerGlobalMode(t *testing.T) {
 	t.Logf("route: %s", routeOf(rec, "tcp", "www.gstatic.com"))
 
 	// UDP through the proxy: one SNTP request to time.google.com's anycast
-	// address. An IP target is used because servers may pick an unreachable
-	// IPv6 address when resolving UDP domain targets.
+	// address. An IP target is used because servers built before the IPv4-first
+	// UDP fix may pick an unreachable IPv6 address for domain targets.
 	ntp := netip.MustParseAddr("216.239.35.0")
 	conn, err := app.DialUDP(netip.AddrPortFrom(ntp, 123))
 	if err != nil {

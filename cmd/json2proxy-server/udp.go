@@ -220,7 +220,7 @@ func (a *app) serveUDP(tunnel net.Conn, writer *frameWriter, session *protocol.S
 					stats.rateDrops.Add(1)
 					continue
 				}
-				egressHost, egressPort, resolved, resolveErr := a.resolveUDP(host, port, user.AllowPrivate)
+				targets, resolveErr := a.resolveUDP(host, port, user.AllowPrivate)
 				if resolveErr != nil {
 					if errors.Is(resolveErr, errPrivateTarget) {
 						_ = writer.presetError(errorPrivateTarget, "private target denied")
@@ -238,14 +238,15 @@ func (a *app) serveUDP(tunnel net.Conn, writer *frameWriter, session *protocol.S
 						delete(recent, endpoint)
 					}
 				}
-				_, exists := recent[resolved]
-				if !exists && len(recent) >= a.cfg.UDP.MaxDestinationsPerAssociation {
-					recentMu.Unlock()
-					stats.policyDrops.Add(1)
-					continue
-				}
 				recentMu.Unlock()
-				if writeErr := egress.WriteDatagram(egressHost, egressPort, data); writeErr != nil {
+				admit := func(key string) bool {
+					recentMu.Lock()
+					defer recentMu.Unlock()
+					_, exists := recent[key]
+					return exists || len(recent) < a.cfg.UDP.MaxDestinationsPerAssociation
+				}
+				resolved, sent := sendUDPDatagram(egress, targets, data, admit)
+				if !sent {
 					stats.policyDrops.Add(1)
 					continue
 				}
@@ -420,12 +421,25 @@ func (a *app) allowUDPRate(clientID string, bytes int) bool {
 	return true
 }
 
-func (a *app) resolveUDP(host string, port uint16, allowPrivate bool) (string, uint16, string, error) {
+// udpTarget is one destination a datagram may be sent to. key is the
+// numeric IP:port used to authorize responses, or the requested name when the
+// SOCKS5 outbound resolves it remotely.
+type udpTarget struct {
+	host string
+	port uint16
+	key  string
+}
+
+// resolveUDP returns the allowed destinations for host in the order they
+// should be tried: IPv4 before IPv6, keeping the resolver's order within each
+// family. A host whose IPv6 route is broken often still reports successful
+// IPv6 sends, so IPv4 goes first; sendUDPDatagram moves on when a send fails.
+func (a *app) resolveUDP(host string, port uint16, allowPrivate bool) ([]udpTarget, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), a.dialTimeout)
 	defer cancel()
 	requestedTarget := net.JoinHostPort(host, strconv.Itoa(int(port)))
 	if a.outboundSOCKS != nil && a.cfg.Outbound.UsesRemoteDNS() && net.ParseIP(host) == nil {
-		return host, port, requestedTarget, nil
+		return []udpTarget{{host: host, port: port, key: requestedTarget}}, nil
 	}
 	var addresses []net.IP
 	if ip := net.ParseIP(host); ip != nil {
@@ -438,11 +452,11 @@ func (a *app) resolveUDP(host string, port uint16, allowPrivate bool) (string, u
 		a.mu.Unlock()
 		if found && now.Before(cached.expires) {
 			if cached.negative {
-				return "", 0, "", errors.New("cached UDP DNS failure")
+				return nil, errors.New("cached UDP DNS failure")
 			}
 			addresses = append([]net.IP(nil), cached.addresses...)
 		} else {
-			ips, lookupErr := net.DefaultResolver.LookupIP(ctx, "ip", host)
+			ips, lookupErr := a.lookupUDPHost(ctx, host)
 			entry := udpDNSCacheEntry{}
 			if lookupErr != nil {
 				entry.negative = true
@@ -455,11 +469,12 @@ func (a *app) resolveUDP(host string, port uint16, allowPrivate bool) (string, u
 			}
 			a.storeUDPDNS(key, entry, now)
 			if lookupErr != nil {
-				return "", 0, "", lookupErr
+				return nil, lookupErr
 			}
 			addresses = ips
 		}
 	}
+	var v4, v6 []udpTarget
 	for _, ip := range addresses {
 		if udpNeverAllowed(ip) {
 			continue
@@ -467,10 +482,38 @@ func (a *app) resolveUDP(host string, port uint16, allowPrivate bool) (string, u
 		if !allowPrivate && forbidden(ip) {
 			continue
 		}
-		address := &net.UDPAddr{IP: ip, Port: int(port)}
-		return address.IP.String(), uint16(address.Port), net.JoinHostPort(ip.String(), strconv.Itoa(int(port))), nil
+		target := udpTarget{host: ip.String(), port: port, key: net.JoinHostPort(ip.String(), strconv.Itoa(int(port)))}
+		if ip.To4() != nil {
+			v4 = append(v4, target)
+		} else {
+			v6 = append(v6, target)
+		}
 	}
-	return "", 0, "", errPrivateTarget
+	if len(v4)+len(v6) == 0 {
+		return nil, errPrivateTarget
+	}
+	return append(v4, v6...), nil
+}
+
+func (a *app) lookupUDPHost(ctx context.Context, host string) ([]net.IP, error) {
+	if a.udpLookup != nil {
+		return a.udpLookup(ctx, host)
+	}
+	return net.DefaultResolver.LookupIP(ctx, "ip", host)
+}
+
+// sendUDPDatagram sends data to the first target that admit allows and the
+// egress accepts, and returns that target's key.
+func sendUDPDatagram(egress udpEgress, targets []udpTarget, data []byte, admit func(key string) bool) (string, bool) {
+	for _, target := range targets {
+		if !admit(target.key) {
+			continue
+		}
+		if err := egress.WriteDatagram(target.host, target.port, data); err == nil {
+			return target.key, true
+		}
+	}
+	return "", false
 }
 
 func udpNeverAllowed(ip net.IP) bool {

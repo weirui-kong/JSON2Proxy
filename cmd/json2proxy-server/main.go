@@ -52,6 +52,8 @@ type app struct {
 	provider         *obfs.Provider
 	outbound         contextDialer
 	outboundSOCKS    *socks5.Client
+	// udpLookup replaces the system resolver for UDP domain targets in tests.
+	udpLookup func(ctx context.Context, host string) ([]net.IP, error)
 }
 
 type frameWriter struct {

@@ -169,15 +169,9 @@ func echoTCP(t *testing.T, conn net.Conn, size int) {
 	}
 }
 
-// startUDPEcho listens on ip, or on every address (IPv4 and IPv6) when ip is
-// nil.
 func startUDPEcho(t *testing.T, ip net.IP) *net.UDPConn {
 	t.Helper()
-	network := "udp4"
-	if ip == nil {
-		network = "udp"
-	}
-	conn, err := net.ListenUDP(network, &net.UDPAddr{IP: ip})
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: ip})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,8 +222,9 @@ func TestEngineProxiesTCPAndUDPByDomain(t *testing.T) {
 	}
 	srv := startServer(t)
 	tcpEcho := startTCPEcho(t)
-	// The server may resolve "localhost" to ::1 or 127.0.0.1.
-	udpEcho := startUDPEcho(t, nil)
+	// "localhost" resolves to both ::1 and 127.0.0.1; the server must pick
+	// IPv4 first for UDP, so an IPv4-only echo has to receive the datagram.
+	udpEcho := startUDPEcho(t, net.IPv4(127, 0, 0, 1))
 	app, rec := startEngine(t, srv.clientConfig(), mustRules(t, "FINAL,PROXY"))
 	rec.waitNotice(t, engine.NoticeConnected)
 
