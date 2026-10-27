@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"io"
 	"net"
@@ -10,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"json2proxy/internal/obfs"
+	"json2proxy/internal/client"
 	"json2proxy/internal/protocol"
 	"json2proxy/internal/socks5"
 )
@@ -57,7 +58,7 @@ func (e *udpEndpoint) get() *net.UDPAddr {
 	return &copyAddr
 }
 
-func (c *client) serveUDP(control net.Conn, reader *bufio.Reader, request socksRequestInfo) {
+func (c *socksServer) serveUDP(control net.Conn, reader *bufio.Reader, request socksRequestInfo) {
 	started := time.Now()
 	source := control.RemoteAddr().String()
 	if request.AddressType == 3 {
@@ -92,32 +93,21 @@ func (c *client) serveUDP(control net.Conn, reader *bufio.Reader, request socksR
 	}
 	defer relay.Close()
 
-	tunnel, wire, writer, session, err := c.openUDPAssociation()
+	assoc, err := c.proxy.OpenUDP(context.Background())
 	if err != nil {
+		var refused *client.OpenError
+		if errors.As(err, &refused) {
+			socksReply(control, mapUDPResult(refused.Code))
+			c.log.Printf("socks udp closed source=%s target=- reason=open_rejected message=%q", source, refused.Message)
+			return
+		}
 		socksReply(control, 1)
 		c.log.Printf("socks udp closed source=%s target=- reason=tunnel_failed error=%q", source, err)
 		return
 	}
-	defer tunnel.Close()
-	defer wire.Stop()
-	sessionID := session.ID()
-
-	if err = writer.frame(protocol.Frame{Type: protocol.FrameUDPOpen, Payload: protocol.UDPOpenPayload()}); err != nil {
-		socksReply(control, 1)
-		return
-	}
-	frame, err := readFrame(wire, session)
-	if err != nil || frame.Type != protocol.FrameUDPOpenResult {
-		socksReply(control, 1)
-		return
-	}
-	code, message, err := protocol.ParseResult(frame.Payload)
-	if err != nil || code != 0 {
-		socksReply(control, mapUDPResult(code))
-		c.log.Printf("socks udp closed source=%s target=- session=%s reason=open_rejected message=%q", source, sessionID, message)
-		return
-	}
-	_ = tunnel.SetDeadline(time.Time{})
+	defer assoc.Close()
+	sessionID := assoc.SessionID()
+	maxDatagram := c.cfg.UDP.MaxDatagramSize
 	bound, _ := relay.LocalAddr().(*net.UDPAddr)
 	if err = socksReplyUDP(control, 0, bound); err != nil {
 		return
@@ -141,7 +131,7 @@ func (c *client) serveUDP(control net.Conn, reader *bufio.Reader, request socksR
 		closeOnce.Do(func() {
 			close(done)
 			_ = relay.Close()
-			_ = tunnel.Close()
+			assoc.Close()
 			_ = control.SetReadDeadline(time.Now())
 			errCh <- err
 		})
@@ -154,7 +144,7 @@ func (c *client) serveUDP(control net.Conn, reader *bufio.Reader, request socksR
 		if readErr == nil {
 			readErr = errors.New("unexpected SOCKS5 control data")
 		}
-		_ = writer.frame(protocol.Frame{Type: protocol.FrameUDPClose, Payload: protocol.Result(2, "control closed")})
+		_ = assoc.SendClose(2, "control closed")
 		finish(readErr)
 	}()
 
@@ -176,7 +166,7 @@ func (c *client) serveUDP(control net.Conn, reader *bufio.Reader, request socksR
 				stats.localDrops.Add(1)
 				continue
 			}
-			if len(data) > c.cfg.UDP.MaxDatagramSize {
+			if len(data) > maxDatagram {
 				stats.oversizeDrops.Add(1)
 				continue
 			}
@@ -211,7 +201,7 @@ func (c *client) serveUDP(control net.Conn, reader *bufio.Reader, request socksR
 			case <-done:
 				return
 			case packet := <-outbound:
-				if writeErr := writer.frame(protocol.Frame{Type: protocol.FrameUDPDatagram, Payload: packet.payload}); writeErr != nil {
+				if writeErr := assoc.Send(packet.payload); writeErr != nil {
 					finish(writeErr)
 					return
 				}
@@ -227,50 +217,28 @@ func (c *client) serveUDP(control net.Conn, reader *bufio.Reader, request socksR
 	go func() {
 		defer workers.Done()
 		for {
-			incoming, readErr := readFrame(wire, session)
+			host, port, data, readErr := assoc.Receive()
 			if readErr != nil {
 				finish(readErr)
 				return
 			}
-			switch incoming.Type {
-			case protocol.FrameUDPDatagram:
-				host, port, data, parseErr := protocol.ParseUDPDatagram(incoming.Payload)
-				if parseErr != nil || len(data) > c.cfg.UDP.MaxDatagramSize {
-					finish(errors.New("invalid server UDP datagram"))
-					return
-				}
-				packet, encodeErr := socks5.EncodeUDPDatagram(host, port, data)
-				if encodeErr != nil {
-					finish(encodeErr)
-					return
-				}
-				application := endpoint.get()
-				if application == nil {
-					stats.localDrops.Add(1)
-					continue
-				}
-				if _, writeErr := relay.WriteToUDP(packet, application); writeErr != nil {
-					finish(writeErr)
-					return
-				}
-				stats.packetsDown.Add(1)
-				stats.bytesDown.Add(uint64(len(data)))
-				lastActivity.Store(time.Now().UnixNano())
-			case protocol.FramePing:
-				if writeErr := writer.frame(protocol.Frame{Type: protocol.FramePong, Payload: incoming.Payload}); writeErr != nil {
-					finish(writeErr)
-					return
-				}
-			case protocol.FrameUDPClose:
-				finish(io.EOF)
-				return
-			case protocol.FrameReset:
-				finish(errors.New("server reset"))
-				return
-			default:
-				finish(errors.New("invalid server UDP frame"))
+			packet, encodeErr := socks5.EncodeUDPDatagram(host, port, data)
+			if encodeErr != nil {
+				finish(encodeErr)
 				return
 			}
+			application := endpoint.get()
+			if application == nil {
+				stats.localDrops.Add(1)
+				continue
+			}
+			if _, writeErr := relay.WriteToUDP(packet, application); writeErr != nil {
+				finish(writeErr)
+				return
+			}
+			stats.packetsDown.Add(1)
+			stats.bytesDown.Add(uint64(len(data)))
+			lastActivity.Store(time.Now().UnixNano())
 		}
 	}()
 
@@ -284,8 +252,8 @@ func (c *client) serveUDP(control net.Conn, reader *bufio.Reader, request socksR
 				return
 			case <-ticker.C:
 				last := time.Unix(0, lastActivity.Load())
-				if time.Since(last) >= c.udpIdleTimeout {
-					_ = writer.frame(protocol.Frame{Type: protocol.FrameUDPClose, Payload: protocol.Result(1, "idle timeout")})
+				if time.Since(last) >= c.proxy.UDPIdleTimeout() {
+					_ = assoc.SendClose(1, "idle timeout")
 					finish(errors.New("UDP idle timeout"))
 					return
 				}
@@ -306,66 +274,6 @@ func (c *client) serveUDP(control net.Conn, reader *bufio.Reader, request socksR
 		source, target, sessionID, stats.packetsUp.Load(), stats.packetsDown.Load(), stats.bytesUp.Load(),
 		stats.bytesDown.Load(), stats.localDrops.Load(), stats.queueDrops.Load(), stats.oversizeDrops.Load(),
 		time.Since(started).Round(time.Millisecond), reason)
-}
-
-func (c *client) openUDPAssociation() (net.Conn, *obfs.Conn, *frameWriter, *protocol.Session, error) {
-	dialer := net.Dialer{Timeout: c.connectTimeout, KeepAlive: 60 * time.Second}
-	tunnel, err := dialer.Dial("tcp", c.cfg.Server)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-	fail := func(err error) (net.Conn, *obfs.Conn, *frameWriter, *protocol.Session, error) {
-		_ = tunnel.Close()
-		return nil, nil, nil, nil, err
-	}
-	if tcp, ok := tunnel.(*net.TCPConn); ok {
-		_ = tcp.SetKeepAlive(true)
-		_ = tcp.SetKeepAlivePeriod(60 * time.Second)
-		_ = tcp.SetNoDelay(true)
-	}
-	_ = tunnel.SetDeadline(time.Now().Add(c.handshakeTimeout))
-	wire, err := c.provider.NewConn(tunnel, "c2s")
-	if err != nil {
-		return fail(err)
-	}
-	writer := &frameWriter{wire: wire, timeout: 30 * time.Second}
-	clientHello, clientPrivate, err := protocol.NewClientHello(c.root, c.provider.Identity(), c.cfg.ClientID, time.Now())
-	if err != nil {
-		wire.Stop()
-		return fail(err)
-	}
-	if err = writer.envelope(clientHello); err != nil {
-		wire.Stop()
-		return fail(err)
-	}
-	serverHello, err := wire.ReadEnvelope()
-	wire.SetPhase("handshake")
-	if err == nil && serverHello.Kind == "error" {
-		wire.Stop()
-		return fail(remoteError(serverHello))
-	}
-	if err != nil || protocol.ValidateServerHello(serverHello, clientHello, c.root, c.provider.Identity(), time.Now()) != nil {
-		wire.Stop()
-		return fail(errors.New("server authentication failed"))
-	}
-	session, err := protocol.NewSession(c.root, c.provider.Identity(), clientHello, serverHello, clientPrivate, "c2s")
-	if err != nil {
-		wire.Stop()
-		return fail(err)
-	}
-	writer.session = session
-	if err = writer.frame(protocol.Frame{Type: protocol.FrameKeyConfirm, Payload: session.Confirmation("client")}); err != nil {
-		wire.Stop()
-		return fail(err)
-	}
-	frame, err := readFrame(wire, session)
-	if err != nil || frame.Type != protocol.FrameKeyConfirm || !session.VerifyConfirmation("server", frame.Payload) {
-		wire.Stop()
-		return fail(errors.New("server key confirmation failed"))
-	}
-	wire.SetPhase("established")
-	wire.StartScheduler()
-	return tunnel, wire, writer, session, nil
 }
 
 func socksReplyUDP(writer io.Writer, code byte, address *net.UDPAddr) error {
