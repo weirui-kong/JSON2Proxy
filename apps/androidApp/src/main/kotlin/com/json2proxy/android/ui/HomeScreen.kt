@@ -1,5 +1,6 @@
 package com.json2proxy.android.ui
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,9 +17,11 @@ import androidx.compose.foundation.border
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -89,6 +92,7 @@ internal fun HomeScreen(
                 )
             }
         },
+        footer = { SystemFooter() },
     ) {
         SessionCard(
             state = state,
@@ -101,6 +105,17 @@ internal fun HomeScreen(
         if (state is ConnectionState.Failed) Banner(BannerKind.Danger, state.label())
         ConnectButton(state, enabled = selected != null, onConnect = onConnect, onDisconnect = { graph.controller.disconnect() })
     }
+}
+
+/** Android version, device model and app version, under the page. */
+@Composable
+private fun SystemFooter() {
+    val context = LocalContext.current
+    val line = remember {
+        val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
+        listOf("Android ${Build.VERSION.RELEASE}", Build.MODEL, "v$version").joinToString(" · ")
+    }
+    Text(line, style = Type.caption, color = Colors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 /** `session.json`: the connection as a small JSON object, then live traffic. */
@@ -196,7 +211,32 @@ private fun TrafficPanel(traffic: TrafficStats, history: List<TrafficPoint>, uni
             StatCell(null, stringResource(R.string.stat_tcp), traffic.tcpConnections.toString(), Colors.textPrimary, Modifier.weight(1f))
             StatCell(null, stringResource(R.string.stat_udp), traffic.udpConnections.toString(), Colors.textPrimary, Modifier.weight(1f))
         }
+        TotalLine(traffic, unit, Modifier.align(Alignment.End))
     }
+}
+
+/** Upload and download of every connection so far, at the panel's bottom right. */
+@Composable
+private fun TotalLine(traffic: TrafficStats, unit: TrafficUnit, modifier: Modifier) {
+    val download = TrafficFormat.amount(traffic.cumulativeDownload, unit)
+    val upload = TrafficFormat.amount(traffic.cumulativeUpload, unit)
+    val description = stringResource(R.string.traffic_total_description, download, upload)
+    val label = stringResource(R.string.traffic_total)
+    val downGlyph = stringResource(R.string.glyph_download)
+    val upGlyph = stringResource(R.string.glyph_upload)
+    Text(
+        buildAnnotatedString {
+            appendColored("$label ", Colors.textSecondary)
+            appendColored("$downGlyph ", Colors.syntaxKey)
+            appendColored(download, Colors.textPrimary)
+            appendColored(" · ", Colors.textSecondary)
+            appendColored("$upGlyph ", Colors.syntaxNumber)
+            appendColored(upload, Colors.textPrimary)
+        },
+        style = Type.caption,
+        maxLines = 1,
+        modifier = modifier.clearAndSetSemantics { contentDescription = description },
+    )
 }
 
 @Composable

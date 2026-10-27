@@ -562,6 +562,16 @@
         }
       }
     },
+    "Interface components, theme and icons" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "介面的元件、主題與圖示"
+          }
+        }
+      }
+    },
     "Invalid address" : {
       "localizations" : {
         "zh-Hant" : {
@@ -698,6 +708,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "網路存取已關閉"
+          }
+        }
+      }
+    },
+    "Network extension memory %@" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網路擴充功能記憶體 %@"
+          }
+        }
+      }
+    },
+    "Network extension memory %@ of %@" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網路擴充功能記憶體 %1$@，上限 %2$@"
           }
         }
       }
@@ -1247,7 +1277,17 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "總數"
+            "value" : "累計"
+          }
+        }
+      }
+    },
+    "Total downloaded %@, uploaded %@" : {
+      "localizations" : {
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "累計下載 %1$@，上傳 %2$@"
           }
         }
       }

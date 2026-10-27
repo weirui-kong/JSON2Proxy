@@ -1,5 +1,6 @@
 import Json2ProxyCore
 import Network
+import os
 @preconcurrency import NetworkExtension
 
 /// Runs the Go engine on the utun interface. The app stores the engine
@@ -35,12 +36,34 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
         let reply: String
         switch String(decoding: messageData, as: UTF8.self) {
-        case SharedConfig.statsMessage: reply = MobileStats(false)
-        case SharedConfig.statsDetailMessage: reply = MobileStats(true)
+        case SharedConfig.statsMessage: reply = Self.addingMemory(to: MobileStats(false))
+        case SharedConfig.statsDetailMessage: reply = Self.addingMemory(to: MobileStats(true))
         case SharedConfig.reloadMessage: reply = reloadEngine()
         default: reply = ""
         }
         completionHandler?(reply.isEmpty ? nil : Data(reply.utf8))
+    }
+
+    /// Adds the extension's memory to a stats snapshot: the footprint the
+    /// system compares with its limit, and how much more it may use.
+    private static func addingMemory(to stats: String) -> String {
+        guard var object = (try? JSONSerialization.jsonObject(with: Data(stats.utf8))) as? [String: Any],
+              let used = physicalFootprint()
+        else { return stats }
+        object["memory"] = ["used": used, "available": Int64(os_proc_available_memory())]
+        guard let data = try? JSONSerialization.data(withJSONObject: object) else { return stats }
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    private static func physicalFootprint() -> Int64? {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        return result == KERN_SUCCESS ? Int64(info.phys_footprint) : nil
     }
 
     /// Replaces the engine with one built from the stored configuration. The

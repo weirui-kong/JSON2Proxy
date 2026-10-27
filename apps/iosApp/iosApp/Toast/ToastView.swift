@@ -1,19 +1,17 @@
 import SwiftUI
+import TerminalUI
 
 struct ToastView: View {
     let toast: Toast
 
     var body: some View {
-        Text(toast.message)
-            .font(Typo.small)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(Colors.textPrimary)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Colors.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Colors.border))
-            .padding(.horizontal, 32)
+        TerminalToast(toast.message)
+            .padding(.horizontal, ToastLayout.sideInset)
     }
+}
+
+private enum ToastLayout {
+    static let sideInset: CGFloat = 32
 }
 
 /// Root view of the toast window: the stack pinned near the bottom, newest
@@ -22,7 +20,7 @@ struct ToastOverlay: View {
     @ObservedObject var center: ToastCenter
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: TerminalSpacing.space8) {
             Spacer(minLength: 0)
             ForEach(center.toasts) { toast in
                 ToastView(toast: toast)
@@ -42,7 +40,7 @@ struct ToastOverlay: View {
 }
 
 #Preview {
-    VStack(spacing: 8) {
+    VStack(spacing: TerminalSpacing.space8) {
         ToastView(toast: Toast("Settings saved"))
         ToastView(toast: Toast("Connected to example.net:8443"))
     }

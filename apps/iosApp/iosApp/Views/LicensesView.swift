@@ -1,5 +1,6 @@
 import Shared
 import SwiftUI
+import TerminalUI
 
 /// Third-party components and data the app uses, grouped by kind, each with its license.
 struct LicensesView: View {
@@ -7,15 +8,15 @@ struct LicensesView: View {
 
     var body: some View {
         TerminalPage {
-            PathTitle(String(localized: "settings"), String(localized: "licenses"))
-            Note(String(localized: "This app uses the following open-source components and data."))
+            TerminalPathTitle(String(localized: "settings"), String(localized: "licenses"))
+            TerminalNote(String(localized: "This app uses the following open-source components and data."))
             ForEach(NoticeCategory.allCases, id: \.self) { category in
                 let group = notices.filter { $0.category == category }
                 if !group.isEmpty {
-                    TerminalSection(title: category.title) {
+                    TerminalSection(category.title) {
                         TerminalCard {
                             ForEach(Array(group.enumerated()), id: \.element.id) { index, notice in
-                                if index > 0 { CardDivider() }
+                                if index > 0 { TerminalCardDivider() }
                                 NoticeRow(notice: notice)
                             }
                         }
@@ -32,17 +33,17 @@ private struct NoticeRow: View {
     @State private var expanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: TerminalSpacing.space4) {
             HStack(alignment: .firstTextBaseline) {
-                Text(verbatim: notice.name).font(Typo.bodyMedium).foregroundStyle(Colors.textPrimary)
-                Spacer(minLength: 8)
-                Text(notice.license.title).font(Typo.label).foregroundStyle(Colors.accent)
+                Text(verbatim: notice.name).font(TerminalType.bodyMedium).foregroundStyle(TerminalColors.textPrimary)
+                Spacer(minLength: TerminalSpacing.space8)
+                Text(notice.license.title).font(TerminalType.label).foregroundStyle(TerminalColors.accentText)
             }
-            Text(notice.id.purpose).font(Typo.small).foregroundStyle(Colors.textSecondary)
-            Text(verbatim: notice.copyright).font(Typo.label).foregroundStyle(Colors.textSecondary)
+            Text(notice.id.purpose).font(TerminalType.small).foregroundStyle(TerminalColors.textSecondary)
+            Text(verbatim: notice.copyright).font(TerminalType.label).foregroundStyle(TerminalColors.textSecondary)
             if let url = URL(string: notice.url) {
                 Link(destination: url) {
-                    Text(verbatim: notice.url).font(Typo.label).foregroundStyle(Colors.syntaxKey)
+                    Text(verbatim: notice.url).font(TerminalType.label).foregroundStyle(TerminalColors.syntaxKey)
                 }
                 .frame(minHeight: 32)
             }
@@ -51,23 +52,23 @@ private struct NoticeRow: View {
                     expanded.toggle()
                 } label: {
                     Text(expanded ? "Hide license text" : "Show license text")
-                        .font(Typo.small)
-                        .foregroundStyle(Colors.textPrimary)
-                        .frame(minHeight: 44)
+                        .font(TerminalType.small)
+                        .foregroundStyle(TerminalColors.textPrimary)
+                        .frame(minHeight: TerminalSize.touch)
                 }
                 .buttonStyle(.plain)
                 if expanded {
                     Text(verbatim: text)
-                        .font(Font.custom(Mono.regular, size: 10, relativeTo: .caption2))
-                        .foregroundStyle(Colors.textSecondary)
-                        .padding(12)
+                        .font(Font.custom(TerminalFonts.regular, size: 10, relativeTo: .caption2))
+                        .foregroundStyle(TerminalColors.textSecondary)
+                        .padding(TerminalSpacing.space12)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Colors.canvas, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .background(TerminalColors.canvas, in: RoundedRectangle(cornerRadius: TerminalRadius.md, style: .continuous))
                         .textSelection(.enabled)
                 }
             }
         }
-        .padding(14)
+        .padding(TerminalSpacing.space14)
     }
 }
 
@@ -105,6 +106,7 @@ extension NoticeId {
         case .jetBrainsMono: String(localized: "Monospaced typeface of the interface")
         case .materialIcons: String(localized: "Android interface icons")
         case .apnicStats: String(localized: "Source of the GeoIP CN address table")
+        case .terminalUi: String(localized: "Interface components, theme and icons")
         }
     }
 }

@@ -133,12 +133,12 @@ func TestTCPPingFailsWhenProtectRefused(t *testing.T) {
 }
 
 func TestParseEngineConfig(t *testing.T) {
-	cfg, limit, err := parseEngineConfig(`{"client":{"server":"example.net:8443"},"mode":"geoip-cn","memory_limit_mb":40}`)
+	cfg, host, err := parseEngineConfig(`{"client":{"server":"example.net:8443"},"mode":"geoip-cn","memory_limit_mb":40,"totals_file":"/data/totals.json"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if limit != 40<<20 {
-		t.Fatalf("memory limit = %d", limit)
+	if host.memoryLimit != 40<<20 || host.totalsFile != "/data/totals.json" {
+		t.Fatalf("host options = %+v", host)
 	}
 	if cfg.DoHURL != aliDoH || cfg.Bootstrap != DefaultBootstrap || cfg.Client.Server != "example.net:8443" {
 		t.Fatalf("defaults not applied: %+v", cfg)
@@ -146,8 +146,8 @@ func TestParseEngineConfig(t *testing.T) {
 	if last := cfg.Rules[len(cfg.Rules)-1].String(); last != "FINAL,PROXY" || cfg.Rules[len(cfg.Rules)-2].String() != "GEOIP,CN,DIRECT" {
 		t.Fatalf("geoip-cn rules = %v", cfg.Rules)
 	}
-	cfg, limit, err = parseEngineConfig(`{"mode":"custom","rules":"DOMAIN,a.test,DIRECT\nFINAL,REJECT","doh":"https://1.1.1.1/dns-query"}`)
-	if err != nil || len(cfg.Rules) != 2 || cfg.DoHURL != "https://1.1.1.1/dns-query" || limit != 0 {
+	cfg, host, err = parseEngineConfig(`{"mode":"custom","rules":"DOMAIN,a.test,DIRECT\nFINAL,REJECT","doh":"https://1.1.1.1/dns-query"}`)
+	if err != nil || len(cfg.Rules) != 2 || cfg.DoHURL != "https://1.1.1.1/dns-query" || host != (hostOptions{}) {
 		t.Fatalf("custom: %+v, err %v", cfg, err)
 	}
 	for _, bad := range []string{`{`, `{"mode":"other"}`, `{"mode":"custom","rules":"DOMAIN,a.test,DIRECT"}`, `{"memory_limit_mb":-1}`} {

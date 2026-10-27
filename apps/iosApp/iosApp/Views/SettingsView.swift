@@ -1,5 +1,6 @@
 import Shared
 import SwiftUI
+import TerminalUI
 
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
@@ -12,70 +13,68 @@ struct SettingsView: View {
 
     var body: some View {
         TerminalPage {
-            PathTitle(String(localized: "settings"))
+            TerminalPathTitle(String(localized: "settings"))
 
-            TerminalSection(title: String(localized: "Routing")) {
-                ChoiceList(options: RoutingMode.allCases, selection: $draft.mode, title: { $0.title }, detail: { $0.wire })
+            TerminalSection(String(localized: "Routing")) {
+                TerminalChoiceList(
+                    selection: $draft.mode,
+                    options: RoutingMode.allCases.map { TerminalOption($0, title: $0.title, detail: $0.wire) }
+                )
                 if draft.mode == .custom {
-                    TerminalField(label: String(localized: "Rules"), error: rulesError.map { String(localized: "Invalid rules: \($0)") }, multiline: true) {
-                        TextEditor(text: $draft.rules)
-                            .font(Typo.small)
-                            .scrollContentBackground(.hidden)
-                            .frame(minHeight: 140)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                    }
+                    TerminalTextField(
+                        String(localized: "Rules"),
+                        text: $draft.rules,
+                        error: rulesError.map { String(localized: "Invalid rules: \($0)") },
+                        lines: Self.rulesLines
+                    )
                 }
-                Note(draft.mode.footnote)
+                TerminalNote(draft.mode.footnote)
             }
 
-            TerminalSection(title: String(localized: "DNS")) {
-                TerminalField(label: String(localized: "DoH URL")) {
-                    TextField(text: $draft.doh, prompt: placeholder(draft.mode.defaultDoH)) { Text("DoH URL") }
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                }
-                TerminalField(label: String(localized: "Bootstrap DNS")) {
-                    TextField(text: $draft.bootstrap, prompt: placeholder(AppSettings.companion.DEFAULT_BOOTSTRAP)) { Text("Bootstrap DNS") }
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-                Note(String(localized: "DoH resolves domains for routing. Bootstrap DNS only resolves the proxy server and the DoH host. Leave empty for the defaults."))
+            TerminalSection(String(localized: "DNS")) {
+                TerminalTextField(String(localized: "DoH URL"), text: $draft.doh, placeholder: draft.mode.defaultDoH)
+                    .keyboardType(.URL)
+                TerminalTextField(String(localized: "Bootstrap DNS"), text: $draft.bootstrap, placeholder: AppSettings.companion.DEFAULT_BOOTSTRAP)
+                TerminalNote(String(localized: "DoH resolves domains for routing. Bootstrap DNS only resolves the proxy server and the DoH host. Leave empty for the defaults."))
             }
 
-            TerminalSection(title: String(localized: "Protection")) {
-                SwitchRow(label: String(localized: "Kill switch"), isOn: $draft.killSwitch)
-                SwitchRow(label: String(localized: "Connect on demand"), isOn: $draft.autoConnect)
-                SwitchRow(label: String(localized: "Strict kill switch"), isOn: $draft.strictKillSwitch)
-                Note(String(localized: "The kill switch blocks traffic while the proxy is down. Strict mode routes all system traffic through the tunnel and can affect AirDrop and local network features. Changes apply on the next connection."))
+            TerminalSection(String(localized: "Protection")) {
+                TerminalSwitchRow(String(localized: "Kill switch"), isOn: $draft.killSwitch)
+                TerminalSwitchRow(String(localized: "Connect on demand"), isOn: $draft.autoConnect)
+                TerminalSwitchRow(String(localized: "Strict kill switch"), isOn: $draft.strictKillSwitch)
+                TerminalNote(String(localized: "The kill switch blocks traffic while the proxy is down. Strict mode routes all system traffic through the tunnel and can affect AirDrop and local network features. Changes apply on the next connection."))
             }
 
-            TerminalSection(title: String(localized: "Traffic units")) {
-                ChoiceList(options: TrafficUnit.allCases, selection: $draft.trafficUnit, title: { $0.title })
+            TerminalSection(String(localized: "Traffic units")) {
+                TerminalChoiceList(
+                    selection: $draft.trafficUnit,
+                    options: TrafficUnit.allCases.map { TerminalOption($0, title: $0.title) }
+                )
             }
-        } bottom: {
+        } footer: {
             // A small, quiet entry at the very end of the page.
             NavigationLink {
                 LicensesView()
             } label: {
-                Text("Open-source licenses")
+                Text("Open-source licenses").foregroundColor(TerminalColors.textSecondary)
             }
-            .buttonStyle(SecondaryButtonStyle(color: Colors.textSecondary))
+            .buttonStyle(TerminalButtonStyle(.secondary))
             .frame(maxWidth: .infinity)
+            // Keeps the gap above it once the page scrolls.
+            .padding(.top, TerminalSpacing.space20)
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let onClose {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(action: onClose) { Label("Close", systemImage: "xmark") }
+                    Button(action: onClose) { Label { Text("Close") } icon: { TerminalIcon.close.image } }
                         .labelStyle(.iconOnly)
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save", action: save)
-                    .font(Typo.bodyBold)
-                    .foregroundStyle(Colors.accent)
+                    .font(TerminalType.bodyBold)
+                    .foregroundStyle(TerminalColors.accentText)
             }
         }
         .onAppear {
@@ -84,6 +83,9 @@ struct SettingsView: View {
             loaded = true
         }
     }
+
+    /// Height of the custom rules box, in lines.
+    private static let rulesLines = 7
 
     private func close() {
         if let onClose { onClose() } else { dismiss() }

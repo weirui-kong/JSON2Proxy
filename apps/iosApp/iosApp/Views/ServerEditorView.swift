@@ -1,5 +1,6 @@
 import Shared
 import SwiftUI
+import TerminalUI
 
 struct ServerEditorView: View {
     @EnvironmentObject private var model: AppModel
@@ -58,59 +59,56 @@ struct ServerEditorView: View {
     var body: some View {
         ScrollViewReader { reader in
             TerminalPage {
-                PathTitle(String(localized: "servers"), existing == nil ? String(localized: "new") : String(localized: "edit"))
+                TerminalPathTitle(String(localized: "servers"), existing == nil ? String(localized: "new") : String(localized: "edit"))
                 if isImport {
-                    Banner(kind: .info, text: String(localized: "Review the imported server, then save."))
+                    TerminalBanner(String(localized: "Review the imported server, then save."), kind: .info)
                 }
 
-                VStack(alignment: .leading, spacing: 14) {
-                    TerminalField(label: String(localized: "Name"), error: error(.name)) {
-                        TextField(text: $name) { Text("Name") }
-                    }
-                    .id(Field.name)
-                    TerminalField(label: String(localized: "Server (host:port)"), error: error(.server)) {
-                        TextField(text: $server) { Text("Server (host:port)") }
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .keyboardType(.URL)
-                    }
-                    .id(Field.server)
-                    TerminalField(label: String(localized: "Client ID"), error: error(.clientId)) {
-                        TextField(text: $clientId) { Text("Client ID") }
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                    }
-                    .id(Field.clientId)
-                    let secretLabel = existing == nil ? String(localized: "Secret") : String(localized: "Secret (leave empty to keep)")
-                    TerminalField(label: secretLabel, error: error(.secret)) {
-                        // The label sits above the field; an empty prompt keeps it from repeating inside.
-                        SecureField(text: $secret, prompt: Text(verbatim: "")) { Text(secretLabel) }
-                    }
+                VStack(alignment: .leading, spacing: TerminalSpacing.space14) {
+                    TerminalTextField(String(localized: "Name"), text: $name, error: error(.name))
+                        .id(Field.name)
+                    TerminalTextField(String(localized: "Server (host:port)"), text: $server, error: error(.server))
+                        .keyboardType(.URL)
+                        .id(Field.server)
+                    TerminalTextField(String(localized: "Client ID"), text: $clientId, error: error(.clientId))
+                        .id(Field.clientId)
+                    // The label sits above the field; an empty placeholder keeps it from repeating inside.
+                    TerminalTextField(
+                        existing == nil ? String(localized: "Secret") : String(localized: "Secret (leave empty to keep)"),
+                        text: $secret,
+                        placeholder: "",
+                        error: error(.secret),
+                        isSecure: true
+                    )
                     .id(Field.secret)
                 }
 
-                TerminalSection(title: String(localized: "Obfuscation")) {
-                    SegmentedChoice(options: ObfsProviders.shared.all, selection: $obfsProvider, label: obfsLabel)
-                        .onChange(of: obfsProvider) { provider in
-                            participation = provider == ObfsProviders.shared.NONE
-                                ? "0" : String(ObfsProviders.shared.DEFAULT_PARTICIPATION)
-                        }
-                    if let message = error(.obfs) { FieldError(text: message) }
+                TerminalSection(String(localized: "Obfuscation")) {
+                    TerminalSegmented(
+                        selection: $obfsProvider,
+                        options: ObfsProviders.shared.all.map { TerminalOption($0, title: obfsLabel($0)) }
+                    )
+                    .onChange(of: obfsProvider) { provider in
+                        participation = provider == ObfsProviders.shared.NONE
+                            ? "0" : String(ObfsProviders.shared.DEFAULT_PARTICIPATION)
+                    }
+                    if let message = error(.obfs) { TerminalFieldError(message) }
                     // Participation only matters once a provider is chosen.
                     if obfsProvider != ObfsProviders.shared.NONE || error(.participation) != nil {
-                        TerminalField(label: String(localized: "Participation (0–1)"), error: error(.participation)) {
-                            TextField(text: $participation) { Text("Participation (0–1)") }
-                                .keyboardType(.decimalPad)
-                        }
-                        .id(Field.participation)
+                        TerminalTextField(String(localized: "Participation (0–1)"), text: $participation, error: error(.participation))
+                            .keyboardType(.decimalPad)
+                            .id(Field.participation)
                     }
                 }
                 .id(Field.obfs)
 
-                TerminalSection(title: String(localized: "Transport")) {
-                    ChoiceList(options: PerformanceModes.shared.all, selection: $performanceMode, title: performanceLabel, detail: { $0 })
-                    if let message = error(.transport) { FieldError(text: message) }
-                    SwitchRow(label: String(localized: "UDP"), isOn: $udpEnabled)
+                TerminalSection(String(localized: "Transport")) {
+                    TerminalChoiceList(
+                        selection: $performanceMode,
+                        options: PerformanceModes.shared.all.map { TerminalOption($0, title: performanceLabel($0), detail: $0) }
+                    )
+                    if let message = error(.transport) { TerminalFieldError(message) }
+                    TerminalSwitchRow(String(localized: "UDP"), isOn: $udpEnabled)
                 }
                 .id(Field.transport)
             }
@@ -122,13 +120,13 @@ struct ServerEditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button { dismiss() } label: { Label("Cancel", systemImage: "xmark") }
+                Button { dismiss() } label: { Label { Text("Cancel") } icon: { TerminalIcon.close.image } }
                     .labelStyle(.iconOnly)
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save", action: save)
-                    .font(Typo.bodyBold)
-                    .foregroundStyle(Colors.accent)
+                    .font(TerminalType.bodyBold)
+                    .foregroundStyle(TerminalColors.accentText)
             }
         }
     }

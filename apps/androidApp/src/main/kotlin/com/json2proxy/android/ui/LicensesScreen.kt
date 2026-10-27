@@ -128,6 +128,7 @@ private fun NoticeId.purpose(): String = stringResource(
         NoticeId.Skie -> R.string.notice_purpose_skie
         NoticeId.AndroidX -> R.string.notice_purpose_androidx
         NoticeId.Zxing -> R.string.notice_purpose_zxing
+        NoticeId.TerminalUi -> R.string.notice_purpose_terminal_ui
         NoticeId.JetBrainsMono -> R.string.notice_purpose_jetbrains_mono
         NoticeId.MaterialIcons -> R.string.notice_purpose_material_icons
         NoticeId.ApnicStats -> R.string.notice_purpose_apnic

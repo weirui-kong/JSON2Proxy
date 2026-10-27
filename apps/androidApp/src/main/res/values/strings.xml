@@ -135,6 +135,8 @@
     <string name="traffic_legend">traffic · 60 s</string>
     <string name="traffic_waiting">Live traffic appears once connected</string>
     <string name="traffic_chart_description">Download %1$s, upload %2$s</string>
+    <string name="traffic_total">Total</string>
+    <string name="traffic_total_description">Total downloaded %1$s, uploaded %2$s</string>
     <string name="home_session_description">%1$s, routing: %2$s</string>
     <string name="kill_switch_on">On</string>
     <string name="kill_switch_off">Off</string>
@@ -164,6 +166,7 @@
     <string name="notice_purpose_skie">Exposes the shared module to Swift</string>
     <string name="notice_purpose_androidx">Android interface, lifecycle and camera</string>
     <string name="notice_purpose_zxing">Generating and reading QR codes</string>
+    <string name="notice_purpose_terminal_ui">iOS interface components, theme and icons</string>
     <string name="notice_purpose_jetbrains_mono">Monospaced typeface of the interface</string>
     <string name="notice_purpose_material_icons">Android interface icons</string>
     <string name="notice_purpose_apnic">Source of the GeoIP CN address table</string>

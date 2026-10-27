@@ -133,6 +133,8 @@
     <string name="traffic_legend">流量 · 60 秒</string>
     <string name="traffic_waiting">連線後顯示即時流量</string>
     <string name="traffic_chart_description">下載 %1$s，上傳 %2$s</string>
+    <string name="traffic_total">累計</string>
+    <string name="traffic_total_description">累計下載 %1$s，上傳 %2$s</string>
     <string name="home_session_description">%1$s，分流：%2$s</string>
     <string name="kill_switch_on">開啟</string>
     <string name="kill_switch_off">關閉</string>
@@ -162,6 +164,7 @@
     <string name="notice_purpose_skie">讓 Swift 使用共用模組</string>
     <string name="notice_purpose_androidx">Android 介面、生命週期與相機</string>
     <string name="notice_purpose_zxing">QR Code 的產生與辨識</string>
+    <string name="notice_purpose_terminal_ui">iOS 介面的元件、主題與圖示</string>
     <string name="notice_purpose_jetbrains_mono">介面的等寬字體</string>
     <string name="notice_purpose_material_icons">Android 介面圖示</string>
     <string name="notice_purpose_apnic">GeoIP CN 位址表的來源</string>

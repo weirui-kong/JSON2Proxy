@@ -28,11 +28,44 @@ data class TrafficStats(
     /** Bytes per second. */
     val uploadSpeed: Long,
     val downloadSpeed: Long,
+    /** Bytes of every engine run so far, kept by the engine across runs. */
+    val cumulativeUpload: Long = 0,
+    val cumulativeDownload: Long = 0,
+    /** Memory of the process running the engine; only the iOS extension reports it. */
+    val memory: MemoryUsage? = null,
     /** Empty unless the sample was taken with detail. */
     val hosts: List<HostTraffic> = emptyList(),
     val dns: List<DnsRecord> = emptyList(),
     val flows: List<FlowRecord> = emptyList(),
 )
+
+/**
+ * Memory of the iOS packet tunnel extension, which the system stops once it
+ * passes its limit. [availableBytes] is how much more it may use; 0 when the
+ * limit is unknown (the Simulator has none).
+ */
+data class MemoryUsage(val usedBytes: Long, val availableBytes: Long) {
+    /** The system limit, or null when unknown. */
+    val limitBytes: Long? get() = if (availableBytes > 0) usedBytes + availableBytes else null
+
+    val pressure: MemoryPressure
+        get() {
+            val limit = limitBytes ?: return MemoryPressure.Normal
+            val share = usedBytes.toDouble() / limit
+            return when {
+                share >= CRITICAL_SHARE -> MemoryPressure.Critical
+                share >= ELEVATED_SHARE -> MemoryPressure.Elevated
+                else -> MemoryPressure.Normal
+            }
+        }
+
+    private companion object {
+        const val ELEVATED_SHARE = 0.70
+        const val CRITICAL_SHARE = 0.85
+    }
+}
+
+enum class MemoryPressure { Normal, Elevated, Critical }
 
 /** Overall speeds of one sample, for the traffic chart. */
 data class TrafficPoint(val uploadSpeed: Long, val downloadSpeed: Long)
@@ -96,10 +129,17 @@ internal data class EngineSnapshot(
     val udp: Int = 0,
     val up: Long = 0,
     val down: Long = 0,
+    @SerialName("total_up") val totalUp: Long = 0,
+    @SerialName("total_down") val totalDown: Long = 0,
     val hosts: List<EngineHost> = emptyList(),
     val dns: List<DnsRecord> = emptyList(),
     val flows: List<FlowRecord> = emptyList(),
+    /** Added by the iOS extension. */
+    val memory: EngineMemory? = null,
 )
+
+@Serializable
+internal data class EngineMemory(val used: Long = 0, val available: Long = 0)
 
 @Serializable
 internal data class EngineHost(
@@ -140,6 +180,9 @@ class TrafficSampler {
             downloadTotal = current.down,
             uploadSpeed = speed(last?.up, current.up, elapsed),
             downloadSpeed = speed(last?.down, current.down, elapsed),
+            cumulativeUpload = current.totalUp,
+            cumulativeDownload = current.totalDown,
+            memory = current.memory?.let { MemoryUsage(it.used, it.available) },
             hosts = current.hosts.map { host ->
                 val before = previousHosts[host.host]
                 HostTraffic(
@@ -175,17 +218,20 @@ class TrafficSampler {
 }
 
 object TrafficFormat {
-    private val byteUnits = listOf("KB/s", "MB/s", "GB/s")
-    private val bitUnits = listOf("Kb/s", "Mb/s", "Gb/s")
+    private val byteUnits = listOf("KB", "MB", "GB")
+    private val bitUnits = listOf("Kb", "Mb", "Gb")
 
     /**
      * Formats a rate with K, M or G only: below 1 K stays in K and anything
      * past G stays in G. Values under 10 get two decimals, under 100 one.
      */
-    fun rate(bytesPerSecond: Long, unit: TrafficUnit): String {
+    fun rate(bytesPerSecond: Long, unit: TrafficUnit): String = "${amount(bytesPerSecond, unit)}/s"
+
+    /** Formats a quantity of data with the same units and rules as [rate], without "/s". */
+    fun amount(bytes: Long, unit: TrafficUnit): String {
         val (base, units, amount) = when (unit) {
-            TrafficUnit.Bytes -> Triple(1024.0, byteUnits, bytesPerSecond.toDouble())
-            TrafficUnit.Bits -> Triple(1000.0, bitUnits, bytesPerSecond * 8.0)
+            TrafficUnit.Bytes -> Triple(1024.0, byteUnits, bytes.toDouble())
+            TrafficUnit.Bits -> Triple(1000.0, bitUnits, bytes * 8.0)
         }
         var value = max(amount, 0.0) / base
         var index = 0

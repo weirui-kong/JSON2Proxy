@@ -10,6 +10,7 @@ enum class NoticeLicense(val spdx: String?) {
     Apache2("Apache-2.0"),
     Bsd3Clause("BSD-3-Clause"),
     Ofl11("OFL-1.1"),
+    Mit("MIT"),
 
     /** Public statistics published by a registry; there is no license text. */
     PublicData(null),
@@ -19,7 +20,7 @@ enum class NoticeLicense(val spdx: String?) {
 enum class NoticeId {
     GoRuntime, GoExtensions, Gvisor, Btree,
     KotlinStdlib, KotlinxCoroutines, KotlinxSerialization, Skie,
-    AndroidX, Zxing,
+    AndroidX, Zxing, TerminalUi,
     JetBrainsMono, MaterialIcons, ApnicStats,
 }
 
@@ -81,6 +82,10 @@ object OpenSourceNotices {
         notice(
             NoticeId.Zxing, "ZXing", "Copyright ZXing authors", "https://github.com/zxing/zxing",
             NoticeCategory.Library, NoticeLicense.Apache2, NoticePlatform.Android, APACHE_2_0,
+        ),
+        notice(
+            NoticeId.TerminalUi, "Terminal UI", "Copyright (c) 2026 Weirui Kong", "https://github.com/supacode-org/terminal-ui",
+            NoticeCategory.Library, NoticeLicense.Mit, NoticePlatform.Ios, MIT_TERMINAL_UI,
         ),
         notice(
             NoticeId.JetBrainsMono, "JetBrains Mono", "Copyright 2020 The JetBrains Mono Project Authors",
