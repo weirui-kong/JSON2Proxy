@@ -54,12 +54,12 @@ chmod 600 .private/configs/*.json
 Start the server and client in separate terminals:
 
 ```bash
-./start-server.sh
-./start-client.sh
+./scripts/start-server.sh
+./scripts/start-client.sh
 ```
 
 Applications can then use the SOCKS5 proxy at `127.0.0.1:8444`. On Linux,
-`install.sh` can install the components as systemd services. Review the example
+`scripts/install.sh` can install the components as systemd services. Review the example
 configuration and replace every placeholder before starting a service.
 
 ## Performance modes
@@ -81,6 +81,18 @@ JSON2Proxy can load a restricted, static Provider descriptor to customize its
 JSON field names, field order, optional metadata, and bounded maintenance
 messages. See [the Obfs Provider guide](docs/OBFS_PROVIDER.md) for the public
 descriptor format and authoring workflow.
+
+## Repository layout
+
+```text
+apps/          Native client apps (Kotlin Multiplatform), see apps/README.md
+cmd/           Go entry points for json2proxy-client and json2proxy-server
+internal/      Go core: config, protocol, obfs, flow control, SOCKS5
+integration/   End-to-end Go tests
+configs/       Public configuration templates
+docs/          Protocol and Provider documentation
+scripts/       Local start scripts and Linux systemd install/uninstall
+```
 
 ## DISCLAIMER
 

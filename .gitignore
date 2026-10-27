@@ -21,6 +21,20 @@ dist/
 coverage/
 coverage.*
 
+# Gradle / Kotlin Multiplatform
+.gradle/
+.kotlin/
+local.properties
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+
 # Private keys and local certificates
 *.key
 *.pem

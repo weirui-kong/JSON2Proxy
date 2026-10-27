@@ -7,7 +7,7 @@ if [[ "$(uname -s)" != "Linux" ]]; then echo "Only Linux is supported." >&2; exi
 if [[ "$EUID" -ne 0 ]]; then echo "Run as root (for example: sudo $0 $COMPONENT)." >&2; exit 1; fi
 if ! command -v systemctl >/dev/null || [[ ! -d /run/systemd/system ]]; then echo "systemd is required." >&2; exit 1; fi
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALL_DIR="/usr/local/lib/json2proxy"
 CONFIG_DIR="/etc/json2proxy"
 STATE_DIR="/var/lib/json2proxy"
@@ -43,8 +43,8 @@ else
 fi
 
 mkdir -p "$TEMP_DIR/bin"
-if "$need_server"; then "$GO_BINARY" build -trimpath -ldflags="-s -w" -o "$TEMP_DIR/bin/json2proxy-server" "$SCRIPT_DIR/cmd/json2proxy-server"; fi
-if "$need_client"; then "$GO_BINARY" build -trimpath -ldflags="-s -w" -o "$TEMP_DIR/bin/json2proxy-client" "$SCRIPT_DIR/cmd/json2proxy-client"; fi
+if "$need_server"; then "$GO_BINARY" build -trimpath -ldflags="-s -w" -o "$TEMP_DIR/bin/json2proxy-server" "$ROOT_DIR/cmd/json2proxy-server"; fi
+if "$need_client"; then "$GO_BINARY" build -trimpath -ldflags="-s -w" -o "$TEMP_DIR/bin/json2proxy-client" "$ROOT_DIR/cmd/json2proxy-client"; fi
 
 if ! id "$SERVICE_USER" >/dev/null 2>&1; then
   useradd --system --home-dir "$STATE_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
@@ -102,11 +102,11 @@ UNIT
 }
 
 if "$need_server"; then
-  install_component json2proxy-server "$SCRIPT_DIR/configs/server.example.json"
+  install_component json2proxy-server "$ROOT_DIR/configs/server.example.json"
   write_unit json2proxy-server
 fi
 if "$need_client"; then
-  install_component json2proxy-client "$SCRIPT_DIR/configs/client.example.json"
+  install_component json2proxy-client "$ROOT_DIR/configs/client.example.json"
   write_unit json2proxy-client
 fi
 systemctl daemon-reload
