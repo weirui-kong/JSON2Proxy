@@ -14,9 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,12 +21,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -43,6 +39,23 @@ import com.json2proxy.shared.PingState
 import com.json2proxy.shared.ServerLinks
 import com.json2proxy.shared.ServerProfile
 import com.json2proxy.shared.ServerSummary
+import org.supacode.terminalui.TerminalButton
+import org.supacode.terminalui.TerminalButtonDecoration
+import org.supacode.terminalui.TerminalButtonVariant
+import org.supacode.terminalui.TerminalCard
+import org.supacode.terminalui.TerminalCardDivider
+import org.supacode.terminalui.TerminalColors
+import org.supacode.terminalui.TerminalGlyph
+import org.supacode.terminalui.TerminalIcon
+import org.supacode.terminalui.TerminalIconImage
+import org.supacode.terminalui.TerminalMenu
+import org.supacode.terminalui.TerminalMenuItem
+import org.supacode.terminalui.TerminalNote
+import org.supacode.terminalui.TerminalPage
+import org.supacode.terminalui.TerminalPageHeader
+import org.supacode.terminalui.TerminalPathTitle
+import org.supacode.terminalui.TerminalSpacing
+import org.supacode.terminalui.TerminalType
 
 @Composable
 internal fun ServerListScreen(
@@ -57,30 +70,34 @@ internal fun ServerListScreen(
     val selectedId by graph.profiles.selectedId.collectAsStateWithLifecycle()
     val pings by graph.controller.pings.collectAsStateWithLifecycle()
 
-    TerminalPage(
-        header = { PageHeader(onBack = onBack) { PathTitle(stringResource(R.string.path_servers)) } },
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SecondaryButton(stringResource(R.string.action_scan), onClick = onScan, modifier = Modifier.weight(1f))
-            SecondaryButton(
+    TerminalPage {
+        TerminalPageHeader(
+            title = { TerminalPathTitle(listOf(stringResource(R.string.path_servers))) },
+            onBack = onBack,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(TerminalSpacing.space8)) {
+            TerminalButton(stringResource(R.string.action_scan), onClick = onScan, modifier = Modifier.weight(1f))
+            TerminalButton(
                 stringResource(R.string.action_test_all),
                 onClick = { graph.controller.pingAll() },
                 enabled = profiles.isNotEmpty(),
                 modifier = Modifier.weight(1f),
             )
-            PrimaryButton(
-                stringResource(R.string.glyph_add, stringResource(R.string.action_add)),
+            TerminalButton(
+                stringResource(R.string.action_add),
                 onClick = { onEdit(null) },
+                variant = TerminalButtonVariant.Primary,
+                decorate = TerminalButtonDecoration.Add,
                 modifier = Modifier.weight(1f),
             )
         }
         Summary(ServerSummary.of(profiles, pings))
         if (profiles.isEmpty()) {
-            Note(stringResource(R.string.servers_empty))
+            TerminalNote(stringResource(R.string.servers_empty))
         } else {
             TerminalCard {
                 profiles.forEachIndexed { index, profile ->
-                    if (index > 0) CardDivider()
+                    if (index > 0) TerminalCardDivider()
                     ServerRow(
                         profile = profile,
                         selected = profile.id == selectedId,
@@ -102,9 +119,9 @@ internal fun ServerListScreen(
                     )
                 }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Note(stringResource(R.string.glyph_selected) + " " + stringResource(R.string.servers_note_selected))
-                Note(stringResource(R.string.servers_note_latency))
+            Column(verticalArrangement = Arrangement.spacedBy(TerminalSpacing.space2)) {
+                TerminalNote(TerminalGlyph.CURRENT + " " + stringResource(R.string.servers_note_selected))
+                TerminalNote(stringResource(R.string.servers_note_latency))
             }
         }
     }
@@ -113,23 +130,23 @@ internal fun ServerListScreen(
 /** Total servers, the best latency and how many failed; `—` until there are results. */
 @Composable
 private fun Summary(summary: ServerSummary) {
-    val none = stringResource(R.string.glyph_none)
+    val none = TerminalGlyph.NONE
     TerminalCard {
         Row(Modifier.height(IntrinsicSize.Min)) {
-            SummaryCell(stringResource(R.string.summary_total), summary.total.toString(), Colors.textPrimary)
-            Box(Modifier.width(1.dp).fillMaxHeight().background(Colors.border))
+            SummaryCell(stringResource(R.string.summary_total), summary.total.toString(), TerminalColors.textPrimary)
+            Box(Modifier.width(1.dp).fillMaxHeight().background(TerminalColors.border))
             SummaryCell(
                 stringResource(R.string.summary_best),
                 summary.bestMillis?.let {
                     if (it < 1) stringResource(R.string.ping_under_1ms) else stringResource(R.string.ping_ms, it.toInt())
                 } ?: none,
-                if (summary.bestMillis != null) Colors.accent else Colors.textSecondary,
+                if (summary.bestMillis != null) TerminalColors.accentText else TerminalColors.textSecondary,
             )
-            Box(Modifier.width(1.dp).fillMaxHeight().background(Colors.border))
+            Box(Modifier.width(1.dp).fillMaxHeight().background(TerminalColors.border))
             SummaryCell(
                 stringResource(R.string.summary_failed),
                 summary.failed?.toString() ?: none,
-                if ((summary.failed ?: 0) > 0) Colors.danger else Colors.textSecondary,
+                if ((summary.failed ?: 0) > 0) TerminalColors.danger else TerminalColors.textSecondary,
             )
         }
     }
@@ -138,11 +155,11 @@ private fun Summary(summary: ServerSummary) {
 @Composable
 private fun androidx.compose.foundation.layout.RowScope.SummaryCell(label: String, value: String, color: Color) {
     Column(
-        Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 10.dp).semantics(mergeDescendants = true) {},
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        Modifier.weight(1f).padding(horizontal = TerminalSpacing.space12, vertical = TerminalSpacing.space10).semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.spacedBy(TerminalSpacing.space2),
     ) {
-        Text(label, style = Type.caption, color = Colors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(value, style = Type.stat, color = color, maxLines = 1)
+        Text(label, style = TerminalType.caption, color = TerminalColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(value, style = TerminalType.stat, color = color, maxLines = 1)
     }
 }
 
@@ -161,56 +178,48 @@ private fun ServerRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (selected) Colors.surfaceSelected else Color.Transparent)
+            .background(if (selected) TerminalColors.surfaceSelected else Color.Transparent)
             .clickable(onClick = onSelect)
             .semantics { this.selected = selected }
-            .padding(start = 14.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(start = TerminalSpacing.space14, top = TerminalSpacing.space12, bottom = TerminalSpacing.space12, end = TerminalSpacing.space4),
+        horizontalArrangement = Arrangement.spacedBy(TerminalSpacing.space10),
     ) {
         Box(Modifier.width(14.dp)) {
-            if (selected) Glyph(stringResource(R.string.glyph_selected), Colors.accent, Type.body.copy(fontWeight = FontWeight.Bold))
+            if (selected) Glyph(TerminalGlyph.CURRENT, TerminalColors.accentText, TerminalType.body.copy(fontWeight = FontWeight.Bold))
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TerminalSpacing.space4)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(TerminalSpacing.space8)) {
                 Text(
                     profile.name,
-                    style = Type.bodyMedium,
-                    color = Colors.textPrimary,
+                    style = TerminalType.bodyMedium,
+                    color = TerminalColors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
                 if (ping != null) {
-                    Text(ping.label(), style = Type.small, color = Latency.grade(ping).color(), maxLines = 1)
+                    Text(ping.label(), style = TerminalType.small, color = Latency.grade(ping).color(), maxLines = 1)
                 }
             }
-            Text(profile.server, style = Type.label, color = Colors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(profile.server, style = TerminalType.label, color = TerminalColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (ping != null) LatencyBar(ping)
         }
+        // A plain `⋮` keeps the rows quiet; the menu itself is the library's.
         Box {
-            IconButton(onClick = { menuOpen = true }) {
-                Icon(
-                    painterResource(R.drawable.ic_more_vert),
-                    contentDescription = stringResource(R.string.action_more),
-                    tint = Colors.textSecondary,
-                    modifier = Modifier.size(20.dp),
-                )
+            val more = stringResource(R.string.action_more)
+            IconButton(onClick = { menuOpen = true }, modifier = Modifier.semantics { contentDescription = more }) {
+                TerminalIconImage(TerminalIcon.MoreVert, tint = TerminalColors.textSecondary, size = 20.dp)
             }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                MenuItem(R.string.action_edit) { menuOpen = false; onEdit() }
-                MenuItem(R.string.action_test_latency) { menuOpen = false; onPing() }
-                MenuItem(R.string.action_show_qr) { menuOpen = false; onShowQr() }
-                MenuItem(R.string.action_delete, Colors.danger) { menuOpen = false; onDelete() }
-            }
+            TerminalMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+                items = listOf(
+                    TerminalMenuItem(stringResource(R.string.action_edit), onSelect = onEdit),
+                    TerminalMenuItem(stringResource(R.string.action_test_latency), onSelect = onPing),
+                    TerminalMenuItem(stringResource(R.string.action_show_qr), onSelect = onShowQr),
+                    TerminalMenuItem(stringResource(R.string.action_delete), danger = true, onSelect = onDelete),
+                ),
+            )
         }
     }
-}
-
-@Composable
-private fun MenuItem(label: Int, color: Color = Colors.textPrimary, onClick: () -> Unit) {
-    DropdownMenuItem(
-        text = { Text(stringResource(label), style = Type.body, color = color) },
-        onClick = onClick,
-        modifier = Modifier.padding(horizontal = 4.dp),
-    )
 }

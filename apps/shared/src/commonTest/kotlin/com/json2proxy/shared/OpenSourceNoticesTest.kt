@@ -16,7 +16,7 @@ class OpenSourceNoticesTest {
         val ios = OpenSourceNotices.forPlatform(NoticePlatform.Ios).map { it.id }
         assertTrue(NoticeId.Zxing in android && NoticeId.Zxing !in ios)
         assertTrue(NoticeId.Skie in ios && NoticeId.Skie !in android)
-        assertTrue(NoticeId.TerminalUi in ios && NoticeId.TerminalUi !in android)
+        assertTrue(NoticeId.TerminalUi in android && NoticeId.TerminalUi in ios)
         assertTrue(NoticeId.Gvisor in android && NoticeId.Gvisor in ios)
     }
 

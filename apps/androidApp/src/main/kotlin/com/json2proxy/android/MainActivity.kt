@@ -9,10 +9,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.toArgb
+import android.content.res.Configuration
 import android.graphics.drawable.ColorDrawable
-import com.json2proxy.android.ui.JsonProxyTheme
 import com.json2proxy.android.ui.JsonProxyUi
-import com.json2proxy.shared.Palette
+import org.supacode.terminalui.TerminalColorSchemes
+import org.supacode.terminalui.TerminalTheme
 
 class MainActivity : ComponentActivity() {
     /** A json2proxy:// link waiting to be imported. */
@@ -20,20 +22,33 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Dark only: light system bar icons over the canvas color.
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-        )
-        window.setBackgroundDrawable(ColorDrawable(Palette.canvas.toInt()))
+        applyAppearance()
         // Recreating the activity redelivers the same intent; import it only once.
         if (savedInstanceState == null) incomingLink = intent.newLinkOrNull()
         val graph = (application as JsonProxyApp).graph
         setContent {
-            JsonProxyTheme {
+            TerminalTheme {
                 JsonProxyUi(graph, incomingLink = incomingLink, onLinkHandled = { incomingLink = null })
             }
         }
+    }
+
+    // The manifest keeps the activity on uiMode changes, so the open page survives a switch of
+    // the system appearance; Compose recolors itself, the window and system bars are redone here.
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyAppearance()
+    }
+
+    /** System bar icons and the window background for the current system appearance. */
+    private fun applyAppearance() {
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+        )
+        val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        val scheme = if (night) TerminalColorSchemes.dark else TerminalColorSchemes.light
+        window.setBackgroundDrawable(ColorDrawable(scheme.canvas.toArgb()))
     }
 
     override fun onNewIntent(intent: Intent) {

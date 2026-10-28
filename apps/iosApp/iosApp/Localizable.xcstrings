@@ -81,16 +81,6 @@
         }
       }
     },
-    "Android interface icons" : {
-      "localizations" : {
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Android 介面圖示"
-          }
-        }
-      }
-    },
     "Android interface, lifecycle and camera" : {
       "localizations" : {
         "zh-Hant" : {
@@ -528,16 +518,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "隱藏授權全文"
-          }
-        }
-      }
-    },
-    "Icons" : {
-      "localizations" : {
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "圖示"
           }
         }
       }

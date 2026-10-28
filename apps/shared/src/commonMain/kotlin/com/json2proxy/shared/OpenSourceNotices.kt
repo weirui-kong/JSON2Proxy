@@ -1,6 +1,6 @@
 package com.json2proxy.shared
 
-enum class NoticeCategory { Library, Font, Icons, Data }
+enum class NoticeCategory { Library, Font, Data }
 
 /** Which app ships the component. */
 enum class NoticePlatform { All, Android, Ios }
@@ -21,7 +21,7 @@ enum class NoticeId {
     GoRuntime, GoExtensions, Gvisor, Btree,
     KotlinStdlib, KotlinxCoroutines, KotlinxSerialization, Skie,
     AndroidX, Zxing, TerminalUi,
-    JetBrainsMono, MaterialIcons, ApnicStats,
+    JetBrainsMono, ApnicStats,
 }
 
 data class OpenSourceNotice(
@@ -85,15 +85,11 @@ object OpenSourceNotices {
         ),
         notice(
             NoticeId.TerminalUi, "Terminal UI", "Copyright (c) 2026 Weirui Kong", "https://github.com/supacode-org/terminal-ui",
-            NoticeCategory.Library, NoticeLicense.Mit, NoticePlatform.Ios, MIT_TERMINAL_UI,
+            NoticeCategory.Library, NoticeLicense.Mit, NoticePlatform.All, MIT_TERMINAL_UI,
         ),
         notice(
             NoticeId.JetBrainsMono, "JetBrains Mono", "Copyright 2020 The JetBrains Mono Project Authors",
             "https://github.com/JetBrains/JetBrainsMono", NoticeCategory.Font, NoticeLicense.Ofl11, NoticePlatform.All, OFL_1_1,
-        ),
-        notice(
-            NoticeId.MaterialIcons, "Material Icons", "Copyright Google LLC", "https://github.com/google/material-design-icons",
-            NoticeCategory.Icons, NoticeLicense.Apache2, NoticePlatform.Android, APACHE_2_0,
         ),
         notice(
             NoticeId.ApnicStats, "APNIC delegated statistics", "Asia Pacific Network Information Centre",

@@ -3,9 +3,6 @@ package com.json2proxy.android.ui
 import android.content.Intent
 import android.provider.Settings
 import android.widget.Toast
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import com.json2proxy.android.R
 import com.json2proxy.shared.AppGraph
 import com.json2proxy.shared.AppSettings
@@ -24,6 +20,18 @@ import com.json2proxy.shared.ModeOptions
 import com.json2proxy.shared.RoutingMode
 import com.json2proxy.shared.TrafficUnit
 import com.json2proxy.shared.normalizeAscii
+import org.supacode.terminalui.TerminalButton
+import org.supacode.terminalui.TerminalButtonVariant
+import org.supacode.terminalui.TerminalChoiceList
+import org.supacode.terminalui.TerminalChoiceOption
+import org.supacode.terminalui.TerminalGlyph
+import org.supacode.terminalui.TerminalNote
+import org.supacode.terminalui.TerminalPage
+import org.supacode.terminalui.TerminalPageHeader
+import org.supacode.terminalui.TerminalPathTitle
+import org.supacode.terminalui.TerminalSection
+import org.supacode.terminalui.TerminalSwitchRow
+import org.supacode.terminalui.TerminalTextField
 
 @Composable
 internal fun SettingsScreen(graph: AppGraph, onBack: () -> Unit, onLicenses: () -> Unit) {
@@ -59,24 +67,26 @@ internal fun SettingsScreen(graph: AppGraph, onBack: () -> Unit, onLicenses: () 
     }
 
     TerminalPage(
-        header = {
-            PageHeader(
-                onBack = onBack,
-                actions = { PrimaryButton(stringResource(R.string.action_save), onClick = save) },
-            ) { PathTitle(stringResource(R.string.path_settings)) }
-        },
-        bottom = {
+        footer = {
             // A small, quiet entry at the very end of the page.
-            SecondaryButton(
+            TerminalButton(
                 stringResource(R.string.settings_licenses),
                 onClick = onLicenses,
-                color = Colors.textSecondary,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             )
         },
     ) {
-        Section(stringResource(R.string.section_routing)) {
-            ChoiceList(RoutingMode.entries, mode, title = { it.title() }, detail = { it.wire }) { mode = it }
+        TerminalPageHeader(
+            title = { TerminalPathTitle(listOf(stringResource(R.string.path_settings))) },
+            onBack = onBack,
+            actions = { TerminalButton(stringResource(R.string.action_save), onClick = save, variant = TerminalButtonVariant.Primary) },
+        )
+        TerminalSection(stringResource(R.string.section_routing)) {
+            TerminalChoiceList(
+                RoutingMode.entries.map { TerminalChoiceOption(it, it.title(), detail = it.wire) },
+                mode,
+                onSelect = { mode = it },
+            )
             if (mode == RoutingMode.Custom) {
                 TerminalTextField(
                     value = rules,
@@ -84,14 +94,14 @@ internal fun SettingsScreen(graph: AppGraph, onBack: () -> Unit, onLicenses: () 
                     label = stringResource(R.string.field_rules),
                     error = rulesError?.let { stringResource(R.string.rules_invalid, it) },
                     keyboardOptions = TechnicalKeyboard,
-                    minLines = 6,
-                    textStyle = Type.small,
+                    multiline = true,
+                    rows = 6,
                 )
             }
-            Note(mode.footnote())
+            TerminalNote(mode.footnote())
         }
 
-        Section(stringResource(R.string.section_dns)) {
+        TerminalSection(stringResource(R.string.section_dns)) {
             TerminalTextField(
                 value = options.dohUrl,
                 onValueChange = { editOptions(options.copy(dohUrl = it)) },
@@ -106,32 +116,23 @@ internal fun SettingsScreen(graph: AppGraph, onBack: () -> Unit, onLicenses: () 
                 placeholder = AppSettings.DEFAULT_BOOTSTRAP,
                 keyboardOptions = TechnicalKeyboard,
             )
-            Note(stringResource(R.string.dns_footnote))
+            TerminalNote(stringResource(R.string.dns_footnote))
         }
 
-        Section(stringResource(R.string.section_protection)) {
-            SwitchRow(stringResource(R.string.field_kill_switch), killSwitch) { killSwitch = it }
-            Note(stringResource(R.string.kill_switch_footnote))
-            SecondaryButton(
-                stringResource(R.string.action_system_vpn_settings) + " " + stringResource(R.string.glyph_external),
+        TerminalSection(stringResource(R.string.section_protection)) {
+            TerminalSwitchRow(stringResource(R.string.field_kill_switch), killSwitch, onCheckedChange = { killSwitch = it })
+            TerminalNote(stringResource(R.string.kill_switch_footnote))
+            TerminalButton(
+                stringResource(R.string.action_system_vpn_settings) + " " + TerminalGlyph.EXTERNAL,
                 onClick = { context.startActivity(Intent(Settings.ACTION_VPN_SETTINGS)) },
-                modifier = Modifier.fillMaxWidth(),
+                fullWidth = true,
             )
-            Note(stringResource(R.string.always_on_footnote))
+            TerminalNote(stringResource(R.string.always_on_footnote))
         }
 
-        Section(stringResource(R.string.section_traffic_unit)) {
-            ChoiceList(TrafficUnit.entries, trafficUnit, title = { it.title() }) { trafficUnit = it }
+        TerminalSection(stringResource(R.string.section_traffic_unit)) {
+            TerminalChoiceList(TrafficUnit.entries.map { TerminalChoiceOption(it, it.title()) }, trafficUnit, onSelect = { trafficUnit = it })
         }
-    }
-}
-
-/** `# Title` followed by its controls. */
-@Composable
-internal fun Section(title: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        SectionTitle(title)
-        content()
     }
 }
 

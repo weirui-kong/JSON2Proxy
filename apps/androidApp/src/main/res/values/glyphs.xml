@@ -1,27 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Technical notation of the terminal style: the same in every language, never translated. -->
+<!-- App-only technical notation, the same in every language and never translated; generic notation is TerminalGlyph. -->
 <resources>
-    <string name="glyph_prompt" translatable="false">$</string>
     <string name="glyph_command" translatable="false">json2proxy</string>
-    <string name="glyph_home_dir" translatable="false">~/</string>
-    <string name="glyph_path_separator" translatable="false">/</string>
-    <string name="glyph_section" translatable="false">#</string>
-    <string name="glyph_comment" translatable="false">//</string>
-    <string name="glyph_selected" translatable="false">&gt;</string>
-    <string name="glyph_radio_on" translatable="false">(•)</string>
-    <string name="glyph_radio_off" translatable="false">( )</string>
-    <string name="glyph_error" translatable="false">✕</string>
-    <string name="glyph_external" translatable="false">↗</string>
-    <string name="glyph_next" translatable="false">→</string>
-    <string name="glyph_download" translatable="false">↓</string>
-    <string name="glyph_upload" translatable="false">↑</string>
-    <string name="glyph_none" translatable="false">—</string>
-    <string name="glyph_add" translatable="false">+ %1$s</string>
-    <string name="glyph_connect" translatable="false">&gt; %1$s_</string>
-    <string name="glyph_disconnect" translatable="false">[ %1$s ]</string>
-    <string name="glyph_bar_filled" translatable="false">█</string>
-    <string name="glyph_bar_empty" translatable="false">░</string>
-    <string name="glyph_bar_failed" translatable="false">·</string>
     <string name="session_file" translatable="false">session.json</string>
     <string name="qr_file" translatable="false">server.qr</string>
     <string name="link_scheme" translatable="false">json2proxy://</string>

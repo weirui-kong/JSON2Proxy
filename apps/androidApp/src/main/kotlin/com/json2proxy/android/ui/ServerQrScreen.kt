@@ -29,27 +29,44 @@ import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.json2proxy.android.R
 import com.json2proxy.shared.ServerProfile
+import org.supacode.terminalui.TerminalBanner
+import org.supacode.terminalui.TerminalBannerKind
+import org.supacode.terminalui.TerminalCard
+import org.supacode.terminalui.TerminalCardDivider
+import org.supacode.terminalui.TerminalColors
+import org.supacode.terminalui.TerminalPage
+import org.supacode.terminalui.TerminalPageHeader
+import org.supacode.terminalui.TerminalPathTitle
+import org.supacode.terminalui.TerminalRadius
+import org.supacode.terminalui.TerminalSpacing
+import org.supacode.terminalui.TerminalType
 
 /** Shows a saved server as a QR code for another device to scan. */
 @Composable
 internal fun ServerQrScreen(profile: ServerProfile, link: String, onBack: () -> Unit) {
     val qr = remember(link) { qrBitmap(link) }
     TerminalPage(
-        header = {
-            PageHeader(onBack = onBack) { PathTitle(stringResource(R.string.path_servers), stringResource(R.string.path_qr)) }
-        },
-        bottom = { Banner(BannerKind.Warning, stringResource(R.string.qr_warning), icon = R.drawable.ic_warning) },
+        footer = { TerminalBanner(stringResource(R.string.qr_warning), kind = TerminalBannerKind.Warning) },
     ) {
+        TerminalPageHeader(
+            title = { TerminalPathTitle(listOf(stringResource(R.string.path_servers), stringResource(R.string.path_qr))) },
+            onBack = onBack,
+        )
         TerminalCard {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
-                Text(stringResource(R.string.qr_file), style = Type.label, color = Colors.textSecondary, modifier = Modifier.weight(1f))
-                Text(stringResource(R.string.link_scheme), style = Type.label, color = Colors.textSecondary)
+            Row(Modifier.fillMaxWidth().padding(horizontal = TerminalSpacing.space14, vertical = TerminalSpacing.space10)) {
+                Text(
+                    stringResource(R.string.qr_file),
+                    style = TerminalType.label,
+                    color = TerminalColors.textSecondary,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(stringResource(R.string.link_scheme), style = TerminalType.label, color = TerminalColors.textSecondary)
             }
-            CardDivider()
+            TerminalCardDivider()
             Column(
-                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                modifier = Modifier.fillMaxWidth().padding(TerminalSpacing.space20),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(TerminalSpacing.space14),
             ) {
                 Image(
                     bitmap = qr.asImageBitmap(),
@@ -61,11 +78,16 @@ internal fun ServerQrScreen(profile: ServerProfile, link: String, onBack: () -> 
                         .fillMaxWidth()
                         .aspectRatio(1f)
                         // The white card is the code's quiet zone, not a palette color.
-                        .background(Color.White, RoundedCornerShape(6.dp))
-                        .padding(16.dp),
+                        .background(Color.White, RoundedCornerShape(TerminalRadius.sm))
+                        .padding(TerminalSpacing.space16),
                 )
-                Text(profile.name, style = Type.title.copy(fontSize = Type.bodyMedium.fontSize), fontWeight = FontWeight.Bold, color = Colors.textPrimary)
-                Text(profile.server, style = Type.label, color = Colors.textSecondary, textAlign = TextAlign.Center)
+                Text(
+                    profile.name,
+                    style = TerminalType.title.copy(fontSize = TerminalType.bodyMedium.fontSize),
+                    fontWeight = FontWeight.Bold,
+                    color = TerminalColors.textPrimary,
+                )
+                Text(profile.server, style = TerminalType.label, color = TerminalColors.textSecondary, textAlign = TextAlign.Center)
             }
         }
     }

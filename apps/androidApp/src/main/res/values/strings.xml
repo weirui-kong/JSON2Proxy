@@ -3,7 +3,6 @@
     <string name="app_name" translatable="false">JSON2Proxy</string>
 
     <!-- Actions -->
-    <string name="action_back">Back</string>
     <string name="action_save">Save</string>
     <string name="action_add">Add</string>
     <string name="action_edit">Edit</string>
@@ -151,7 +150,6 @@
     <string name="licenses_intro">This app uses the following open-source components and data.</string>
     <string name="notice_category_library">Libraries</string>
     <string name="notice_category_font">Fonts</string>
-    <string name="notice_category_icons">Icons</string>
     <string name="notice_category_data">Data</string>
     <string name="notice_license_public_data">Public statistics</string>
     <string name="notice_show_text">Show license text</string>
@@ -168,6 +166,5 @@
     <string name="notice_purpose_zxing">Generating and reading QR codes</string>
     <string name="notice_purpose_terminal_ui">iOS interface components, theme and icons</string>
     <string name="notice_purpose_jetbrains_mono">Monospaced typeface of the interface</string>
-    <string name="notice_purpose_material_icons">Android interface icons</string>
     <string name="notice_purpose_apnic">Source of the GeoIP CN address table</string>
 </resources>

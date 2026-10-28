@@ -18,8 +18,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
 import com.json2proxy.android.R
 import com.json2proxy.shared.AppGraph
 import com.json2proxy.shared.ObfsProviders
@@ -30,6 +28,21 @@ import com.json2proxy.shared.ServerLink
 import com.json2proxy.shared.ServerProfile
 import com.json2proxy.shared.normalizeAscii
 import kotlinx.coroutines.launch
+import org.supacode.terminalui.TerminalBanner
+import org.supacode.terminalui.TerminalButton
+import org.supacode.terminalui.TerminalButtonVariant
+import org.supacode.terminalui.TerminalChoiceList
+import org.supacode.terminalui.TerminalChoiceOption
+import org.supacode.terminalui.TerminalIcon
+import org.supacode.terminalui.TerminalPage
+import org.supacode.terminalui.TerminalPageHeader
+import org.supacode.terminalui.TerminalPathTitle
+import org.supacode.terminalui.TerminalSection
+import org.supacode.terminalui.TerminalSegmented
+import org.supacode.terminalui.TerminalSegmentedOption
+import org.supacode.terminalui.TerminalSpacing
+import org.supacode.terminalui.TerminalSwitchRow
+import org.supacode.terminalui.TerminalTextField
 
 /** Parts of the form that a validation problem points at. */
 private enum class Field { Name, Server, ClientId, Secret, Obfs, Participation, Transport }
@@ -95,24 +108,23 @@ internal fun ServerEditorScreen(graph: AppGraph, profileId: String?, imported: S
     @Composable
     fun errorFor(field: Field): String? = problems.firstOrNull { it.field() == field }?.text()
 
-    TerminalPage(
-        header = {
-            PageHeader(
-                onBack = onDone,
-                backIcon = if (existing == null) R.drawable.ic_close else R.drawable.ic_arrow_back,
-                backLabel = if (existing == null) R.string.action_close else R.string.action_back,
-                actions = { PrimaryButton(stringResource(R.string.action_save), onClick = save) },
-            ) {
-                PathTitle(
-                    stringResource(R.string.path_servers),
-                    stringResource(if (existing == null) R.string.path_new else R.string.path_edit),
+    TerminalPage {
+        TerminalPageHeader(
+            title = {
+                TerminalPathTitle(
+                    listOf(
+                        stringResource(R.string.path_servers),
+                        stringResource(if (existing == null) R.string.path_new else R.string.path_edit),
+                    ),
                 )
-            }
-        },
-    ) {
-        if (imported != null) Banner(BannerKind.Info, stringResource(R.string.import_review))
+            },
+            onBack = onDone,
+            backIcon = if (existing == null) TerminalIcon.Close else TerminalIcon.ArrowBack,
+            actions = { TerminalButton(stringResource(R.string.action_save), onClick = save, variant = TerminalButtonVariant.Primary) },
+        )
+        if (imported != null) TerminalBanner(stringResource(R.string.import_review))
 
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(TerminalSpacing.space14)) {
             TerminalTextField(
                 value = name, onValueChange = { name = it },
                 label = stringResource(R.string.field_name),
@@ -138,18 +150,17 @@ internal fun ServerEditorScreen(graph: AppGraph, profileId: String?, imported: S
                 value = secret, onValueChange = { secret = it },
                 label = stringResource(if (existing == null) R.string.field_secret else R.string.field_secret_keep),
                 error = errorFor(Field.Secret),
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = TechnicalKeyboard.copy(keyboardType = KeyboardType.Password),
+                password = true,
+                keyboardOptions = TechnicalKeyboard,
                 modifier = Modifier.tracked(Field.Secret),
             )
         }
 
-        Column(Modifier.tracked(Field.Obfs), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SectionTitle(stringResource(R.string.section_obfuscation))
-            SegmentedChoice(ObfsProviders.all, obfs, label = { obfsLabel(it) }) {
+        TerminalSection(stringResource(R.string.section_obfuscation), Modifier.tracked(Field.Obfs)) {
+            TerminalSegmented(ObfsProviders.all.map { TerminalSegmentedOption(it, obfsLabel(it)) }, obfs, onSelect = {
                 obfs = it
                 participation = if (it == ObfsProviders.NONE) "0" else ObfsProviders.DEFAULT_PARTICIPATION.toString()
-            }
+            })
             errorFor(Field.Obfs)?.let { FieldError(it) }
             // Participation only matters once a provider is chosen.
             if (obfs != ObfsProviders.NONE || errorFor(Field.Participation) != null) {
@@ -163,11 +174,14 @@ internal fun ServerEditorScreen(graph: AppGraph, profileId: String?, imported: S
             }
         }
 
-        Column(Modifier.tracked(Field.Transport), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SectionTitle(stringResource(R.string.section_transport))
-            ChoiceList(PerformanceModes.all, performance, title = { performanceLabel(it) }, detail = { it }) { performance = it }
+        TerminalSection(stringResource(R.string.section_transport), Modifier.tracked(Field.Transport)) {
+            TerminalChoiceList(
+                PerformanceModes.all.map { TerminalChoiceOption(it, performanceLabel(it), detail = it) },
+                performance,
+                onSelect = { performance = it },
+            )
             errorFor(Field.Transport)?.let { FieldError(it) }
-            SwitchRow(stringResource(R.string.field_udp), udp) { udp = it }
+            TerminalSwitchRow(stringResource(R.string.field_udp), udp, onCheckedChange = { udp = it })
         }
     }
 }
