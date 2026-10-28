@@ -1,19 +1,33 @@
 package com.json2proxy.android.ui
 
 import android.os.Build
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.border
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -40,6 +55,28 @@ import com.json2proxy.shared.TrafficFormat
 import com.json2proxy.shared.TrafficPoint
 import com.json2proxy.shared.TrafficStats
 import com.json2proxy.shared.TrafficUnit
+import org.supacode.terminalui.TerminalBanner
+import org.supacode.terminalui.TerminalBannerKind
+import org.supacode.terminalui.TerminalButton
+import org.supacode.terminalui.TerminalButtonDecoration
+import org.supacode.terminalui.TerminalButtonSize
+import org.supacode.terminalui.TerminalButtonVariant
+import org.supacode.terminalui.TerminalCard
+import org.supacode.terminalui.TerminalCardDivider
+import org.supacode.terminalui.TerminalChartLegend
+import org.supacode.terminalui.TerminalColors
+import org.supacode.terminalui.TerminalGlyph
+import org.supacode.terminalui.TerminalIcon
+import org.supacode.terminalui.TerminalIconButton
+import org.supacode.terminalui.TerminalLegendItem
+import org.supacode.terminalui.TerminalNote
+import org.supacode.terminalui.TerminalPageHeader
+import org.supacode.terminalui.TerminalPromptTitle
+import org.supacode.terminalui.TerminalSize
+import org.supacode.terminalui.TerminalSpacing
+import org.supacode.terminalui.TerminalTrafficChart
+import org.supacode.terminalui.TerminalTrafficPoint
+import org.supacode.terminalui.TerminalType
 
 @Composable
 internal fun HomeScreen(
@@ -57,13 +94,7 @@ internal fun HomeScreen(
     val pings by graph.controller.pings.collectAsStateWithLifecycle()
     val selected = profiles.firstOrNull { it.id == selectedId }
 
-    TerminalPage(
-        header = {
-            PageHeader(
-                onBack = null,
-                actions = { SquareIconButton(R.drawable.ic_tune, stringResource(R.string.home_settings), onClick = onSettings) },
-            ) { PromptTitle() }
-        },
+    HomePage(
         bottom = {
             TerminalCard {
                 NavRow(
@@ -73,20 +104,20 @@ internal fun HomeScreen(
                     trailing = selected?.let { pings[it.server] }?.let { ping -> ping.label() to Latency.grade(ping).color() },
                     onClick = onServers,
                 )
-                CardDivider()
+                TerminalCardDivider()
                 NavRow(
                     label = stringResource(R.string.section_routing),
                     title = settings.routingMode.title(),
                     onClick = onSettings,
                 )
-                CardDivider()
+                TerminalCardDivider()
                 NavRow(
                     label = stringResource(R.string.field_kill_switch),
                     title = null,
                     trailing = if (settings.killSwitch) {
-                        stringResource(R.string.kill_switch_on) to Colors.accent
+                        stringResource(R.string.kill_switch_on) to TerminalColors.accentText
                     } else {
-                        stringResource(R.string.kill_switch_off) to Colors.textSecondary
+                        stringResource(R.string.kill_switch_off) to TerminalColors.textSecondary
                     },
                     onClick = onSettings,
                 )
@@ -94,6 +125,10 @@ internal fun HomeScreen(
         },
         footer = { SystemFooter() },
     ) {
+        TerminalPageHeader(
+            title = { TerminalPromptTitle(stringResource(R.string.glyph_command)) },
+            actions = { TerminalIconButton(TerminalIcon.Tune, stringResource(R.string.home_settings), onClick = onSettings) },
+        )
         SessionCard(
             state = state,
             server = selected?.name,
@@ -102,8 +137,53 @@ internal fun HomeScreen(
             history = history,
             unit = settings.trafficUnit,
         )
-        if (state is ConnectionState.Failed) Banner(BannerKind.Danger, state.label())
+        if (state is ConnectionState.Failed) TerminalBanner(state.label(), kind = TerminalBannerKind.Danger, icon = null)
         ConnectButton(state, enabled = selected != null, onConnect = onConnect, onDisconnect = { graph.controller.disconnect() })
+    }
+}
+
+/**
+ * The home page: [org.supacode.terminalui.TerminalPage]'s layout plus a [footer] line that is
+ * not part of the page. It follows the screen-high content, so it only shows once scrolled to:
+ * unlike the iOS home indicator area, the navigation bar inset has no room for it.
+ */
+@Composable
+private fun HomePage(
+    bottom: @Composable ColumnScope.() -> Unit,
+    footer: @Composable () -> Unit,
+    scroll: ScrollState = rememberScrollState(),
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val density = LocalDensity.current
+    val navigationInset = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .background(TerminalColors.canvas)
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
+    ) {
+        val viewport = maxHeight - navigationInset
+        Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = viewport)
+                    .padding(horizontal = TerminalSpacing.space20, vertical = TerminalSpacing.space16),
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(TerminalSpacing.space20), content = content)
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = TerminalSpacing.space20),
+                    verticalArrangement = Arrangement.spacedBy(TerminalSpacing.space12),
+                    content = bottom,
+                )
+            }
+            Box(
+                Modifier.fillMaxWidth().padding(start = TerminalSpacing.space20, end = TerminalSpacing.space20, bottom = TerminalSpacing.space8),
+                contentAlignment = Alignment.Center,
+            ) { footer() }
+            Spacer(Modifier.height(navigationInset))
+        }
     }
 }
 
@@ -115,7 +195,7 @@ private fun SystemFooter() {
         val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
         listOf("Android ${Build.VERSION.RELEASE}", Build.MODEL, "v$version").joinToString(" · ")
     }
-    Text(line, style = Type.caption, color = Colors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Text(line, style = TerminalType.caption, color = TerminalColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 /** `session.json`: the connection as a small JSON object, then live traffic. */
@@ -130,11 +210,11 @@ private fun SessionCard(
 ) {
     val live = state is ConnectionState.Connected
     val (stateValue, stateColor) = when (state) {
-        is ConnectionState.Connected -> stringResource(R.string.json_state_connected) to Colors.accent
-        is ConnectionState.Connecting -> stringResource(R.string.json_state_connecting) to Colors.warning
-        ConnectionState.Disconnecting -> stringResource(R.string.json_state_disconnecting) to Colors.warning
-        is ConnectionState.Failed -> stringResource(R.string.json_state_failed) to Colors.danger
-        ConnectionState.Disconnected -> stringResource(R.string.json_state_disconnected) to Colors.textSecondary
+        is ConnectionState.Connected -> stringResource(R.string.json_state_connected) to TerminalColors.accentText
+        is ConnectionState.Connecting -> stringResource(R.string.json_state_connecting) to TerminalColors.warning
+        ConnectionState.Disconnecting -> stringResource(R.string.json_state_disconnecting) to TerminalColors.warning
+        is ConnectionState.Failed -> stringResource(R.string.json_state_failed) to TerminalColors.danger
+        ConnectionState.Disconnected -> stringResource(R.string.json_state_disconnected) to TerminalColors.textSecondary
     }
     val description = stringResource(R.string.home_session_description, state.label(), routing.title())
     val keyState = stringResource(R.string.json_key_state)
@@ -144,50 +224,58 @@ private fun SessionCard(
 
     TerminalCard {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = TerminalSpacing.space14, vertical = TerminalSpacing.space10),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(stringResource(R.string.session_file), style = Type.label, color = Colors.textSecondary, modifier = Modifier.weight(1f))
-            val dot = if (live) Colors.accent else Colors.textSecondary
-            Box(Modifier.size(7.dp).background(dot, CircleShape))
+            Text(
+                stringResource(R.string.session_file),
+                style = TerminalType.label,
+                color = TerminalColors.textSecondary,
+                modifier = Modifier.weight(1f),
+            )
+            Box(Modifier.size(7.dp).background(if (live) TerminalColors.accent else TerminalColors.textSecondary, CircleShape))
             Text(
                 stringResource(if (live) R.string.session_live else R.string.session_idle),
-                style = Type.label,
-                color = dot,
-                modifier = Modifier.padding(start = 6.dp),
+                style = TerminalType.label,
+                color = if (live) TerminalColors.accentText else TerminalColors.textSecondary,
+                modifier = Modifier.padding(start = TerminalSpacing.space6),
             )
         }
-        CardDivider()
+        TerminalCardDivider()
+        val punctuation = TerminalColors.textSecondary
+        val keyColor = TerminalColors.syntaxKey
+        val stringColor = TerminalColors.syntaxString
+        val numberColor = TerminalColors.syntaxNumber
         val json = buildAnnotatedString {
             fun key(name: String) {
                 append("  ")
-                appendColored("\"$name\"", Colors.syntaxKey)
-                appendColored(": ", Colors.textSecondary)
+                appendColored("\"$name\"", keyColor)
+                appendColored(": ", punctuation)
             }
-            appendColored("{\n", Colors.textSecondary)
+            appendColored("{\n", punctuation)
             key(keyState)
             appendColored("\"$stateValue\"", stateColor)
-            appendColored(",\n", Colors.textSecondary)
+            appendColored(",\n", punctuation)
             key(keyServer)
-            if (server != null) appendColored("\"$server\"", Colors.syntaxString) else appendColored(nullValue, Colors.syntaxNumber)
-            appendColored(",\n", Colors.textSecondary)
+            if (server != null) appendColored("\"$server\"", stringColor) else appendColored(nullValue, numberColor)
+            appendColored(",\n", punctuation)
             key(keyRouting)
-            appendColored("\"${routing.wire}\"", Colors.syntaxString)
-            appendColored("\n}", Colors.textSecondary)
+            appendColored("\"${routing.wire}\"", stringColor)
+            appendColored("\n}", punctuation)
         }
         Text(
             json,
-            style = Type.code,
+            style = TerminalType.code,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .padding(horizontal = TerminalSpacing.space14, vertical = TerminalSpacing.space12)
                 .clearAndSetSemantics { contentDescription = description },
         )
-        CardDivider()
+        TerminalCardDivider()
         if (live && traffic != null) {
             TrafficPanel(traffic, history, unit)
         } else {
-            Note(stringResource(R.string.traffic_waiting), Modifier.padding(14.dp))
+            TerminalNote(stringResource(R.string.traffic_waiting), Modifier.padding(TerminalSpacing.space14))
         }
     }
 }
@@ -196,20 +284,30 @@ private fun SessionCard(
 private fun TrafficPanel(traffic: TrafficStats, history: List<TrafficPoint>, unit: TrafficUnit) {
     val download = TrafficFormat.rate(traffic.downloadSpeed, unit)
     val upload = TrafficFormat.rate(traffic.uploadSpeed, unit)
-    Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(
+        Modifier.padding(start = TerminalSpacing.space14, end = TerminalSpacing.space14, top = TerminalSpacing.space12, bottom = TerminalSpacing.space14),
+        verticalArrangement = Arrangement.spacedBy(TerminalSpacing.space10),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Note(stringResource(R.string.traffic_legend), Modifier.weight(1f))
-            Legend(Colors.syntaxKey, stringResource(R.string.traffic_download))
-            Legend(Colors.syntaxNumber, stringResource(R.string.traffic_upload), Modifier.padding(start = 10.dp))
+            TerminalNote(stringResource(R.string.traffic_legend), Modifier.weight(1f))
+            TerminalChartLegend(
+                listOf(
+                    TerminalLegendItem(stringResource(R.string.traffic_download), TerminalColors.syntaxKey),
+                    TerminalLegendItem(stringResource(R.string.traffic_upload), TerminalColors.syntaxNumber),
+                ),
+            )
         }
-        TrafficChart(history, stringResource(R.string.traffic_chart_description, download, upload))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatCell(stringResource(R.string.glyph_download), stringResource(R.string.traffic_download), download, Colors.syntaxKey, Modifier.weight(1f))
-            StatCell(stringResource(R.string.glyph_upload), stringResource(R.string.traffic_upload), upload, Colors.syntaxNumber, Modifier.weight(1f))
+        TerminalTrafficChart(
+            history.map { TerminalTrafficPoint(up = it.uploadSpeed.toDouble(), down = it.downloadSpeed.toDouble()) },
+            stringResource(R.string.traffic_chart_description, download, upload),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(TerminalSpacing.space8)) {
+            StatCell(TerminalGlyph.DOWNLOAD, stringResource(R.string.traffic_download), download, TerminalColors.syntaxKey, Modifier.weight(1f))
+            StatCell(TerminalGlyph.UPLOAD, stringResource(R.string.traffic_upload), upload, TerminalColors.syntaxNumber, Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatCell(null, stringResource(R.string.stat_tcp), traffic.tcpConnections.toString(), Colors.textPrimary, Modifier.weight(1f))
-            StatCell(null, stringResource(R.string.stat_udp), traffic.udpConnections.toString(), Colors.textPrimary, Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(TerminalSpacing.space8)) {
+            StatCell(null, stringResource(R.string.stat_tcp), traffic.tcpConnections.toString(), TerminalColors.textPrimary, Modifier.weight(1f))
+            StatCell(null, stringResource(R.string.stat_udp), traffic.udpConnections.toString(), TerminalColors.textPrimary, Modifier.weight(1f))
         }
         TotalLine(traffic, unit, Modifier.align(Alignment.End))
     }
@@ -222,29 +320,23 @@ private fun TotalLine(traffic: TrafficStats, unit: TrafficUnit, modifier: Modifi
     val upload = TrafficFormat.amount(traffic.cumulativeUpload, unit)
     val description = stringResource(R.string.traffic_total_description, download, upload)
     val label = stringResource(R.string.traffic_total)
-    val downGlyph = stringResource(R.string.glyph_download)
-    val upGlyph = stringResource(R.string.glyph_upload)
+    val secondary = TerminalColors.textSecondary
+    val primary = TerminalColors.textPrimary
+    val downColor = TerminalColors.syntaxKey
+    val upColor = TerminalColors.syntaxNumber
     Text(
         buildAnnotatedString {
-            appendColored("$label ", Colors.textSecondary)
-            appendColored("$downGlyph ", Colors.syntaxKey)
-            appendColored(download, Colors.textPrimary)
-            appendColored(" · ", Colors.textSecondary)
-            appendColored("$upGlyph ", Colors.syntaxNumber)
-            appendColored(upload, Colors.textPrimary)
+            appendColored("$label ", secondary)
+            appendColored("${TerminalGlyph.DOWNLOAD} ", downColor)
+            appendColored(download, primary)
+            appendColored(" ${TerminalGlyph.DOT} ", secondary)
+            appendColored("${TerminalGlyph.UPLOAD} ", upColor)
+            appendColored(upload, primary)
         },
-        style = Type.caption,
+        style = TerminalType.caption,
         maxLines = 1,
         modifier = modifier.clearAndSetSemantics { contentDescription = description },
     )
-}
-
-@Composable
-private fun Legend(color: Color, label: String, modifier: Modifier = Modifier) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        LegendMark(color)
-        Text(label, style = Type.caption, color = Colors.textSecondary)
-    }
 }
 
 /** Label over a value; a rate's unit is smaller and dimmed. */
@@ -253,20 +345,21 @@ private fun StatCell(glyph: String?, label: String, value: String, color: Color,
     val (number, unit) = splitRate(value)
     Column(
         modifier = modifier
-            .border(1.dp, Colors.border, ControlShape)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+            .border(1.dp, TerminalColors.border, ControlShape)
+            .padding(horizontal = TerminalSpacing.space10, vertical = TerminalSpacing.space8),
+        verticalArrangement = Arrangement.spacedBy(TerminalSpacing.space2),
     ) {
         Row {
-            if (glyph != null) Glyph("$glyph ", style = Type.caption)
-            Text(label, style = Type.caption, color = Colors.textSecondary)
+            if (glyph != null) Glyph("$glyph ", style = TerminalType.caption)
+            Text(label, style = TerminalType.caption, color = TerminalColors.textSecondary)
         }
+        val unitColor = TerminalColors.textSecondary
         Text(
             buildAnnotatedString {
                 appendColored(number, color)
-                if (unit.isNotEmpty()) appendColored(" $unit", Colors.textSecondary)
+                if (unit.isNotEmpty()) appendColored(" $unit", unitColor)
             },
-            style = Type.stat,
+            style = TerminalType.stat,
             maxLines = 1,
         )
     }
@@ -278,23 +371,26 @@ private fun ConnectButton(state: ConnectionState, enabled: Boolean, onConnect: (
     val connect = stringResource(R.string.action_connect)
     val disconnect = stringResource(R.string.action_disconnect)
     if (state.isActive()) {
-        SecondaryButton(
-            text = stringResource(R.string.glyph_disconnect, disconnect),
+        // The small text of the outlined actions, at the large button's height.
+        TerminalButton(
+            text = disconnect,
             onClick = onDisconnect,
+            variant = TerminalButtonVariant.Danger,
+            decorate = TerminalButtonDecoration.Bracket,
+            fullWidth = true,
             enabled = state != ConnectionState.Disconnecting,
-            color = Colors.danger,
-            borderColor = Colors.danger,
-            containerColor = Color.Transparent,
-            height = 52.dp,
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = disconnect },
+            modifier = Modifier.heightIn(min = TerminalSize.row).semantics { contentDescription = disconnect },
         )
     } else {
-        PrimaryButton(
-            text = stringResource(R.string.glyph_connect, connect),
+        TerminalButton(
+            text = connect,
             onClick = onConnect,
+            variant = TerminalButtonVariant.Primary,
+            size = TerminalButtonSize.Lg,
+            decorate = TerminalButtonDecoration.Prompt,
+            fullWidth = true,
             enabled = enabled,
-            height = 52.dp,
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = connect },
+            modifier = Modifier.semantics { contentDescription = connect },
         )
     }
 }
@@ -313,22 +409,22 @@ private fun NavRow(
             .fillMaxWidth()
             .heightIn(min = 52.dp)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = TerminalSpacing.space14, vertical = TerminalSpacing.space10),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(TerminalSpacing.space12),
     ) {
-        Text(label, style = Type.small, color = Colors.textSecondary, modifier = Modifier.width(96.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, style = TerminalType.small, color = TerminalColors.textSecondary, modifier = Modifier.width(96.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TerminalSpacing.space2)) {
             if (title != null) {
-                Text(title, style = Type.bodyMedium, color = Colors.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, style = TerminalType.bodyMedium, color = TerminalColors.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (subtitle != null) {
-                Text(subtitle, style = Type.label, color = Colors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, style = TerminalType.label, color = TerminalColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         trailing?.let { (text, color) ->
-            Text(text, style = Type.small.copy(fontWeight = FontWeight.Medium), color = color, maxLines = 1)
+            Text(text, style = TerminalType.small.copy(fontWeight = FontWeight.Medium), color = color, maxLines = 1)
         }
-        Glyph(stringResource(R.string.glyph_next))
+        Glyph(TerminalGlyph.NEXT)
     }
 }

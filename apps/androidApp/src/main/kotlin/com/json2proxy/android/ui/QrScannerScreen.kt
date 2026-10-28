@@ -1,9 +1,11 @@
 package com.json2proxy.android.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -12,7 +14,6 @@ import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.DrawableRes
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -45,8 +46,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -70,14 +69,15 @@ import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -99,6 +99,18 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 import kotlin.math.max
 import kotlin.math.min
+import org.supacode.terminalui.TerminalBanner
+import org.supacode.terminalui.TerminalBannerKind
+import org.supacode.terminalui.TerminalCard
+import org.supacode.terminalui.TerminalColors
+import org.supacode.terminalui.TerminalGlyph
+import org.supacode.terminalui.TerminalIcon
+import org.supacode.terminalui.TerminalIconButton
+import org.supacode.terminalui.TerminalOpacity
+import org.supacode.terminalui.TerminalSpacing
+import org.supacode.terminalui.TerminalTheme
+import org.supacode.terminalui.TerminalTone
+import org.supacode.terminalui.TerminalType
 
 private object ScannerLayout {
     val viewfinderMaxSide = 260.dp
@@ -111,7 +123,6 @@ private object ScannerLayout {
     val buttonSide = 44.dp
     val hintHeight = 44.dp
     val hintBottomInset = 24.dp
-    const val DIM_ALPHA = 0.35f
     const val SUCCESS_DISMISS_MILLIS = 350L
     const val HINT_RESET_MILLIS = 2000L
 
@@ -123,10 +134,37 @@ private object ScannerLayout {
  * Full-screen camera scanner for server QR codes, styled after the iOS one:
  * dimmed preview with a rounded viewfinder, breathing corner brackets that snap
  * onto an accepted code, close and flashlight buttons, and a hint card that
- * briefly shows why a code was rejected.
+ * briefly shows why a code was rejected. Always dark, as it sits over the camera.
  */
 @Composable
 internal fun QrScannerScreen(onClose: () -> Unit, onLink: (ServerLink) -> Unit) {
+    LightSystemBarIcons()
+    TerminalTheme(darkTheme = true) { Scanner(onClose, onLink) }
+}
+
+/**
+ * Light status and navigation bar icons while shown, whatever the system appearance; again
+ * after an appearance switch, which resets them. Leaving restores the icons of the appearance.
+ */
+@Composable
+private fun LightSystemBarIcons() {
+    val view = LocalView.current
+    val uiMode = LocalConfiguration.current.uiMode
+    DisposableEffect(view, uiMode) {
+        val window = (view.context as? Activity)?.window ?: return@DisposableEffect onDispose {}
+        val controller = WindowCompat.getInsetsController(window, view)
+        controller.isAppearanceLightStatusBars = false
+        controller.isAppearanceLightNavigationBars = false
+        onDispose {
+            val night = view.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+            controller.isAppearanceLightStatusBars = !night
+            controller.isAppearanceLightNavigationBars = !night
+        }
+    }
+}
+
+@Composable
+private fun Scanner(onClose: () -> Unit, onLink: (ServerLink) -> Unit) {
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
@@ -188,7 +226,7 @@ internal fun QrScannerScreen(onClose: () -> Unit, onLink: (ServerLink) -> Unit) 
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(Colors.canvas)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(TerminalColors.canvas)) {
         val density = LocalDensity.current
         val viewfinder = with(density) {
             val side = min(maxWidth.toPx() * ScannerLayout.VIEWFINDER_WIDTH_RATIO, ScannerLayout.viewfinderMaxSide.toPx())
@@ -216,6 +254,7 @@ internal fun QrScannerScreen(onClose: () -> Unit, onLink: (ServerLink) -> Unit) 
             animationSpec = infiniteRepeatable(tween(1100), RepeatMode.Reverse),
             label = "bracketAlpha",
         )
+        val bracketColor = if (rejection != null) TerminalColors.danger else TerminalColors.accent
         Canvas(Modifier.fillMaxSize()) {
             val radius = ScannerLayout.viewfinderCornerRadius.toPx()
             val dim = Path().apply {
@@ -224,28 +263,29 @@ internal fun QrScannerScreen(onClose: () -> Unit, onLink: (ServerLink) -> Unit) 
                 addRoundRect(RoundRect(viewfinder, CornerRadius(radius)))
             }
             // Dims the camera picture itself, so it stays black rather than a palette color.
-            drawPath(dim, Color.Black.copy(alpha = ScannerLayout.DIM_ALPHA))
+            drawPath(dim, Color.Black.copy(alpha = TerminalOpacity.cameraDim))
             drawPath(
                 bracketPath(bracket.value, radius, ScannerLayout.bracketLength.toPx()),
-                (if (rejection != null) Colors.danger else Colors.accent).copy(alpha = if (handled) 1f else breathing),
+                bracketColor.copy(alpha = if (handled) 1f else breathing),
                 style = Stroke(ScannerLayout.bracketLineWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
             )
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = TerminalSpacing.space16, vertical = TerminalSpacing.space8),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            SquareIconButton(R.drawable.ic_close, stringResource(R.string.action_close), onClick = onClose)
+            TerminalIconButton(TerminalIcon.Close, stringResource(R.string.action_close), onClick = onClose)
             if (camera?.cameraInfo?.hasFlashUnit() == true) {
-                SquareIconButton(
-                    if (torchOn) R.drawable.ic_flashlight_on else R.drawable.ic_flashlight_off,
+                TerminalIconButton(
+                    if (torchOn) TerminalIcon.FlashlightOn else TerminalIcon.FlashlightOff,
                     stringResource(R.string.action_flashlight),
-                    tint = if (torchOn) Colors.warning else Colors.textPrimary,
-                ) {
-                    torchOn = !torchOn
-                    camera?.cameraControl?.enableTorch(torchOn)
-                }
+                    tone = if (torchOn) TerminalTone.Warning else null,
+                    onClick = {
+                        torchOn = !torchOn
+                        camera?.cameraControl?.enableTorch(torchOn)
+                    },
+                )
             }
         }
 
@@ -253,17 +293,17 @@ internal fun QrScannerScreen(onClose: () -> Unit, onLink: (ServerLink) -> Unit) 
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, bottom = ScannerLayout.hintBottomInset)
+                .padding(start = TerminalSpacing.space20, end = TerminalSpacing.space20, bottom = ScannerLayout.hintBottomInset)
                 .heightIn(min = ScannerLayout.hintHeight),
         ) {
             val reason = rejection
             if (reason != null) {
-                Banner(BannerKind.Danger, reason, icon = R.drawable.ic_warning)
+                TerminalBanner(reason, kind = TerminalBannerKind.Danger)
             } else {
                 TerminalCard {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Glyph(stringResource(R.string.glyph_selected) + " ", Colors.accent, Type.body.copy(fontWeight = FontWeight.Bold))
-                        Text(stringResource(R.string.scanner_hint), style = Type.small, color = Colors.textPrimary)
+                    Row(Modifier.padding(TerminalSpacing.space14), verticalAlignment = Alignment.CenterVertically) {
+                        Glyph(TerminalGlyph.CURRENT + " ", TerminalColors.accentText, TerminalType.body.copy(fontWeight = FontWeight.Bold))
+                        Text(stringResource(R.string.scanner_hint), style = TerminalType.small, color = TerminalColors.textPrimary)
                     }
                 }
             }

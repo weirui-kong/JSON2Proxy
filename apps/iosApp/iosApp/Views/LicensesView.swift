@@ -77,7 +77,6 @@ extension NoticeCategory {
         switch self {
         case .library: String(localized: "Libraries")
         case .font: String(localized: "Fonts")
-        case .icons: String(localized: "Icons")
         case .data: String(localized: "Data")
         }
     }
@@ -104,7 +103,6 @@ extension NoticeId {
         case .androidX: String(localized: "Android interface, lifecycle and camera")
         case .zxing: String(localized: "Generating and reading QR codes")
         case .jetBrainsMono: String(localized: "Monospaced typeface of the interface")
-        case .materialIcons: String(localized: "Android interface icons")
         case .apnicStats: String(localized: "Source of the GeoIP CN address table")
         case .terminalUi: String(localized: "Interface components, theme and icons")
         }

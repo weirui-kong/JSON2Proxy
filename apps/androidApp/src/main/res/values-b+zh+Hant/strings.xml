@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- 動作 -->
-    <string name="action_back">返回</string>
     <string name="action_save">儲存</string>
     <string name="action_add">新增</string>
     <string name="action_edit">編輯</string>
@@ -149,7 +148,6 @@
     <string name="licenses_intro">本 App 使用以下開放原始碼元件與資料。</string>
     <string name="notice_category_library">程式庫</string>
     <string name="notice_category_font">字體</string>
-    <string name="notice_category_icons">圖示</string>
     <string name="notice_category_data">資料</string>
     <string name="notice_license_public_data">公開統計資料</string>
     <string name="notice_show_text">顯示授權全文</string>
@@ -166,6 +164,5 @@
     <string name="notice_purpose_zxing">QR Code 的產生與辨識</string>
     <string name="notice_purpose_terminal_ui">iOS 介面的元件、主題與圖示</string>
     <string name="notice_purpose_jetbrains_mono">介面的等寬字體</string>
-    <string name="notice_purpose_material_icons">Android 介面圖示</string>
     <string name="notice_purpose_apnic">GeoIP CN 位址表的來源</string>
 </resources>

@@ -29,24 +29,34 @@ import com.json2proxy.shared.NoticeLicense
 import com.json2proxy.shared.NoticePlatform
 import com.json2proxy.shared.OpenSourceNotice
 import com.json2proxy.shared.OpenSourceNotices
+import org.supacode.terminalui.TerminalCard
+import org.supacode.terminalui.TerminalCardDivider
+import org.supacode.terminalui.TerminalColors
+import org.supacode.terminalui.TerminalNote
+import org.supacode.terminalui.TerminalPage
+import org.supacode.terminalui.TerminalPageHeader
+import org.supacode.terminalui.TerminalPathTitle
+import org.supacode.terminalui.TerminalSection
+import org.supacode.terminalui.TerminalSpacing
+import org.supacode.terminalui.TerminalType
 
 /** Third-party components and data the app uses, grouped by kind, each with its license. */
 @Composable
 internal fun LicensesScreen(onBack: () -> Unit) {
     val notices = OpenSourceNotices.forPlatform(NoticePlatform.Android)
-    TerminalPage(
-        header = {
-            PageHeader(onBack = onBack) { PathTitle(stringResource(R.string.path_settings), stringResource(R.string.path_licenses)) }
-        },
-    ) {
-        Note(stringResource(R.string.licenses_intro))
+    TerminalPage {
+        TerminalPageHeader(
+            title = { TerminalPathTitle(listOf(stringResource(R.string.path_settings), stringResource(R.string.path_licenses))) },
+            onBack = onBack,
+        )
+        TerminalNote(stringResource(R.string.licenses_intro))
         NoticeCategory.entries.forEach { category ->
             val group = notices.filter { it.category == category }
             if (group.isNotEmpty()) {
-                Section(category.title()) {
+                TerminalSection(category.title()) {
                     TerminalCard {
                         group.forEachIndexed { index, notice ->
-                            if (index > 0) CardDivider()
+                            if (index > 0) TerminalCardDivider()
                             NoticeRow(notice)
                         }
                     }
@@ -60,17 +70,17 @@ internal fun LicensesScreen(onBack: () -> Unit) {
 private fun NoticeRow(notice: OpenSourceNotice) {
     var expanded by rememberSaveable(notice.id) { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
-    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(TerminalSpacing.space14), verticalArrangement = Arrangement.spacedBy(TerminalSpacing.space4)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(notice.name, style = Type.bodyMedium, color = Colors.textPrimary, modifier = Modifier.weight(1f))
-            Text(notice.license.title(), style = Type.label, color = Colors.accent)
+            Text(notice.name, style = TerminalType.bodyMedium, color = TerminalColors.textPrimary, modifier = Modifier.weight(1f))
+            Text(notice.license.title(), style = TerminalType.label, color = TerminalColors.accentText)
         }
-        Text(notice.id.purpose(), style = Type.small, color = Colors.textSecondary)
-        Text(notice.copyright, style = Type.label, color = Colors.textSecondary)
+        Text(notice.id.purpose(), style = TerminalType.small, color = TerminalColors.textSecondary)
+        Text(notice.copyright, style = TerminalType.label, color = TerminalColors.textSecondary)
         Text(
             notice.url,
-            style = Type.label,
-            color = Colors.syntaxKey,
+            style = TerminalType.label,
+            color = TerminalColors.syntaxKey,
             modifier = Modifier
                 .heightIn(min = 32.dp)
                 .clickable(role = Role.Button) { uriHandler.openUri(notice.url) }
@@ -80,8 +90,8 @@ private fun NoticeRow(notice: OpenSourceNotice) {
         if (text != null) {
             Text(
                 stringResource(if (expanded) R.string.notice_hide_text else R.string.notice_show_text),
-                style = Type.small.copy(fontWeight = FontWeight.Medium),
-                color = Colors.textPrimary,
+                style = TerminalType.small.copy(fontWeight = FontWeight.Medium),
+                color = TerminalColors.textPrimary,
                 modifier = Modifier
                     .heightIn(min = 44.dp)
                     .clickable(role = Role.Button) { expanded = !expanded }
@@ -90,12 +100,12 @@ private fun NoticeRow(notice: OpenSourceNotice) {
             if (expanded) {
                 Text(
                     text,
-                    style = Type.caption.copy(fontSize = 10.sp, lineHeight = 14.sp),
-                    color = Colors.textSecondary,
+                    style = TerminalType.caption.copy(fontSize = 10.sp, lineHeight = 14.sp),
+                    color = TerminalColors.textSecondary,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Colors.canvas, ControlShape)
-                        .padding(12.dp),
+                        .background(TerminalColors.canvas, ControlShape)
+                        .padding(TerminalSpacing.space12),
                 )
             }
         }
@@ -107,7 +117,6 @@ private fun NoticeCategory.title(): String = stringResource(
     when (this) {
         NoticeCategory.Library -> R.string.notice_category_library
         NoticeCategory.Font -> R.string.notice_category_font
-        NoticeCategory.Icons -> R.string.notice_category_icons
         NoticeCategory.Data -> R.string.notice_category_data
     },
 )
@@ -130,7 +139,6 @@ private fun NoticeId.purpose(): String = stringResource(
         NoticeId.Zxing -> R.string.notice_purpose_zxing
         NoticeId.TerminalUi -> R.string.notice_purpose_terminal_ui
         NoticeId.JetBrainsMono -> R.string.notice_purpose_jetbrains_mono
-        NoticeId.MaterialIcons -> R.string.notice_purpose_material_icons
         NoticeId.ApnicStats -> R.string.notice_purpose_apnic
     },
 )
